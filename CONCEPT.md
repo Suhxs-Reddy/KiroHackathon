@@ -178,10 +178,11 @@ The gate fires visually — a blocked action shows exactly why it was stopped an
 - Ethics Logic Gate runs client-side before every action
 
 ### LLM Integration
-- Policy text → structured JSON extraction prompt
-- Model: GPT-4o or Claude 3.5 Sonnet via API (fast, reliable, no training needed)
-- Prompt engineered for consistent structured output
-- Cached per site + policy version to avoid redundant API calls
+- Model: Fine-tuned model specifically for privacy policy / user agreement analysis
+- Base model fine-tuned on privacy policy datasets (OPP-115: 115 annotated privacy policies, ToS;DR data)
+- Fine-tuning makes it accurate on legal privacy language — "legitimate interest", "service providers", "aggregate data", etc. — where general LLMs are imprecise
+- Output: structured JSON (data types, purposes, third-party sharing, risk signals)
+- Cached per site + policy version to avoid redundant calls
 
 ### Web Dashboard (Frontend)
 - React SPA
