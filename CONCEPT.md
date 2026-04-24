@@ -125,6 +125,13 @@ If any check fails, the action is blocked and the user is notified with an expla
 - Pending opt-out actions across all sites
 - Overall privacy health score
 
+**Historical breach context:**
+For each site, the dashboard surfaces past data breaches relevant to the data types that site collects. Not a prediction — historical record only.
+- "Companies that collect and sell location data like this have been involved in X breaches"
+- Shows what data was exposed, when, and how many users were affected
+- Source: public breach databases (Have I Been Pwned API, Privacy Rights Clearinghouse)
+- Makes the risk concrete and real, not abstract
+
 **Design principle:** Per-site by default — don't overwhelm. Aggregate is one tap away for users who want it.
 
 ### 5.4 Email Reminders
@@ -147,24 +154,37 @@ If any check fails, the action is blocked and the user is notified with an expla
 
 ---
 
-## 6. Ethics Logic Gate
+## 6. Ethics Logic Gate (Model Transparency)
 
-The hackathon requirement — and the technical centerpiece of the demo.
+The hackathon requirement — built into the model's output, not a separate rules engine.
 
 ### What it is
-A validation layer that runs before every automated action the tool takes. It checks three things:
-1. **Consent** — has the user authorized this type of action?
-2. **Safety** — is the action reversible and non-harmful?
-3. **Legitimacy** — is the target (email address, form, URL) verified as belonging to the site?
+Every risk flag the model produces is traceable. The model doesn't just output "high risk" — it outputs the exact clause in the policy that triggered the flag, with a direct quote and section reference.
 
-### What it blocks
-- Sending opt-out emails to unverified addresses
-- Submitting forms on pages that don't match the site's known domain
-- Taking any action the user hasn't explicitly enabled in settings
-- Automated actions on sites the user has marked as "accepted risk"
+**Example output:**
+```
+{
+  "risk_level": "high",
+  "risk_reasons": [
+    {
+      "reason": "Data sold to third-party brokers",
+      "source_clause": "We may share your information with third-party partners for marketing purposes.",
+      "policy_section": "Section 4.2 — Data Sharing"
+    },
+    {
+      "reason": "Precise location tracking",
+      "source_clause": "We collect your precise GPS location when the app is in use.",
+      "policy_section": "Section 2.1 — Data Collection"
+    }
+  ]
+}
+```
 
-### What judges see in the demo
-The gate fires visually — a blocked action shows exactly why it was stopped and what the user can do instead. It's not a warning, it's a hard stop with an explanation.
+### Why this matters
+- Users see the evidence, not just a verdict — full transparency
+- Consistent output: same policy always produces same structured result
+- Judges can verify the model is reasoning correctly, not hallucinating
+- "Our model doesn't tell you what to think — it shows you exactly where it found the problem"
 
 ---
 
