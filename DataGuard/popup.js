@@ -562,11 +562,19 @@ function renderPolicyAnalysis(analysis) {
           html += '<div class="data-type-actions">'
           for (const mech of guidance.mechanisms) {
             if (mech.type === 'settings_url' || mech.type === 'web_form') {
+              html += `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">🔗 ${escapeHtml(mech.value)}</div>`
               html += `<button class="action-btn primary" data-action="open-url" data-url="${escapeAttr(mech.value)}">🔗 Opt Out</button>`
             } else if (mech.type === 'email') {
+              html += `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">✉️ ${escapeHtml(mech.value)}</div>`
               html += `<button class="action-btn primary" data-action="send-email" data-email="${escapeAttr(mech.value)}" data-domain="${escapeAttr(analysis.targetDomain)}" data-datatype="${escapeAttr(dt.dataType)}">✉️ Send Email</button>`
             } else if (mech.type === 'postal_mail') {
+              html += `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">📬 ${escapeHtml(mech.value)}</div>`
               html += `<button class="action-btn" data-action="add-calendar" data-domain="${escapeAttr(analysis.targetDomain)}" data-datatype="${escapeAttr(dt.dataType)}">📅 Add to Calendar</button>`
+            } else if (mech.type === 'account_steps') {
+              html += `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">📋 ${escapeHtml(mech.value)}</div>`
+            }
+            if (mech.instructionText) {
+              html += `<div style="font-size: 10px; color: var(--text-muted); font-style: italic; margin-bottom: 4px;">${escapeHtml(mech.instructionText)}</div>`
             }
           }
           html += '</div>'
@@ -749,11 +757,6 @@ async function analyzePolicyFromPopup(domain, policyUrlFromScan) {
     if (loadingEl) loadingEl.classList.add('hidden')
 
     if (response && response.success && response.analysis) {
-      // Cache the analysis result for this domain
-      await new Promise(resolve => {
-        chrome.storage.local.set({ [`policy_analysis_${domain}`]: response.analysis }, resolve)
-      })
-
       renderPolicyAnalysis(response.analysis)
     } else {
       // Show error
@@ -796,15 +799,7 @@ async function initPolicyAnalysis(domain, policyUrlFromScan) {
   const btn = el('analyze-policy-btn')
   const contentEl = el('policy-analysis-content')
 
-  // Check for cached analysis
-  const cacheKey = `policy_analysis_${domain}`
-  const cached = await new Promise(resolve => {
-    chrome.storage.local.get([cacheKey], result => resolve(result[cacheKey] || null))
-  })
-
-  if (cached) {
-    renderPolicyAnalysis(cached)
-  }
+  // No cache — always show the analyze button, run fresh analysis each time
 
   // Wire up the analyze button
   if (btn) {
