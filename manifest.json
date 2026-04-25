@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Privacy Tool",
+  "name": "DataGuard",
   "version": "0.1.0",
-  "description": "Detects privacy policies and identifies data at risk using AI analysis of ToS/privacy policy text.",
-  "permissions": ["storage", "activeTab", "alarms", "notifications"],
+  "description": "See what data any website collects, check breach history, and get opt-out steps — in plain language.",
+  "permissions": ["storage", "activeTab", "alarms", "notifications", "scripting", "tabs"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "dist/background.js",
     "type": "module"
@@ -13,10 +14,21 @@
       "matches": ["<all_urls>"],
       "js": ["dist/content_script.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["DataGuard/content.js"],
+      "run_at": "document_idle"
     }
   ],
   "action": {
-    "default_popup": "public/popup.html",
-    "default_title": "Privacy Tool"
+    "default_popup": "DataGuard/popup.html",
+    "default_title": "DataGuard"
+  },
+  "options_page": "DataGuard/options.html",
+  "icons": {
+    "16": "DataGuard/icons/icon16.png",
+    "48": "DataGuard/icons/icon48.png",
+    "128": "DataGuard/icons/icon128.png"
   }
 }
