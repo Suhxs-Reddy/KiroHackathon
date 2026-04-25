@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Privacy Customization Tool is a cross-platform privacy guardian that helps privacy-conscious users understand, manage, and act on the privacy policies and Terms of Service (ToS) of third-party websites and applications. The tool operates primarily as a browser extension (Chrome, Edge, Safari) with a stretch-goal system-level agent that detects when users encounter privacy policies or ToS agreements in locally installed applications. It analyzes policy documents using AI (supporting both user-provided cloud API keys and local models), generates plain-language summaries, extracts opt-out methods, identifies applicable legal protections (GDPR, CCPA, etc.), and provides actionable steps to maximize user privacy. The tool also researches the security track record of services, offers alternative privacy-respecting services, and can act on the user's behalf to exercise legal privacy rights.
+The Privacy Customization Tool is a cross-platform privacy guardian that helps privacy-conscious users understand, manage, and act on the privacy policies and Terms of Service (ToS) of third-party websites and applications. The tool operates primarily as a browser extension (Chrome, Edge, Safari) with a stretch-goal system-level agent that detects when users encounter privacy policies or ToS agreements in locally installed applications. It analyzes policy documents using AI (supporting both user-provided cloud API keys and local models), generates plain-language summaries with color-coded data collection indicators, extracts opt-out methods, identifies applicable legal protections (GDPR, CCPA, etc.), and provides actionable steps to maximize user privacy. The tool also researches the security track record of services, offers alternative privacy-respecting services, and can act on the user's behalf to exercise legal privacy rights.
 
 ## Glossary
 
@@ -10,8 +10,10 @@ The Privacy Customization Tool is a cross-platform privacy guardian that helps p
 - **User**: An individual who installs and uses the Privacy_Tool to protect their privacy
 - **Target_Service**: Any third-party website, SaaS platform, or locally installed application whose privacy policy or ToS the Privacy_Tool analyzes
 - **Policy_Document**: A privacy policy, Terms of Service, or data processing agreement published by a Target_Service
-- **Policy_Summary**: An AI-generated plain-language breakdown of a Policy_Document, highlighting key privacy implications
+- **Policy_Summary**: An AI-generated plain-language breakdown of a Policy_Document, highlighting key privacy implications and displaying color-coded Data_Collection_Categories
 - **Privacy_Option**: A specific data collection practice, sharing arrangement, or tracking mechanism identified within a Policy_Document that the User can potentially opt out of
+- **Data_Collection_Category**: A color-coded classification applied to each data type identified in a Policy_Document. Grey indicates not collected, Blue indicates collected, Yellow indicates collected and shared with third parties, Red indicates collected and sold to third parties
+- **Data_Category**: One of the predefined categories used to organize data types in a Policy_Summary. The categories are: Health, Purchases, Financial, Location, Contact Info, Contacts, User Content, Search, Browsing, Identifiers, Usage Data, Sensitive Info, Diagnostics, and Other Data
 - **Opt_Out_Method**: The specific procedure extracted from a Policy_Document or Target_Service for disabling a Privacy_Option (e.g., account settings path, email request, web form)
 - **Privacy_Right**: A legal right available to the User based on their jurisdiction (e.g., GDPR right to erasure, CCPA right to opt out of sale)
 - **Rights_Action**: An automated action the Privacy_Tool takes on the User's behalf to exercise a Privacy_Right with a Target_Service
@@ -26,7 +28,11 @@ The Privacy Customization Tool is a cross-platform privacy guardian that helps p
 - **Alert_Popup**: An on-screen notification overlay that the User must explicitly dismiss, used for urgent privacy alerts and revisit notifications
 - **Calendar_Event**: A calendar entry exported by the Privacy_Tool to the User's calendar application for tracking privacy-related deadlines and reminders
 
-## Requirements
+---
+
+## Phase 1: Core (Required)
+
+These requirements form the minimum viable product. The tool cannot ship without them.
 
 ### Requirement 1: Privacy Policy and ToS Detection
 
@@ -42,18 +48,22 @@ The Privacy Customization Tool is a cross-platform privacy guardian that helps p
 
 ### Requirement 2: AI-Powered Policy Analysis and Summary
 
-**User Story:** As a User, I want the Privacy_Tool to analyze privacy policies and generate plain-language summaries, so that I can understand what I am agreeing to without reading legal jargon.
+**User Story:** As a User, I want the Privacy_Tool to analyze privacy policies and generate plain-language summaries with color-coded data collection indicators, so that I can understand what I am agreeing to without reading legal jargon.
 
 #### Acceptance Criteria
 
 1. WHEN a User requests analysis of a Policy_Document, THE AI_Engine SHALL generate a Policy_Summary written at or below an 8th-grade reading level
-2. THE Policy_Summary SHALL identify and list all Privacy_Options found in the Policy_Document, including data collection practices, sharing arrangements, and tracking mechanisms
-3. THE Policy_Summary SHALL highlight clauses that are unusually broad, grant excessive data access, or deviate from industry-standard privacy practices
-4. WHEN a Policy_Document contains ambiguous or vague language about data usage, THE AI_Engine SHALL flag those sections with a warning in the Policy_Summary
-5. THE AI_Engine SHALL assign a privacy risk rating to each identified Privacy_Option on a scale of low, medium, and high based on the scope of data affected
-6. IF the Policy_Document has been previously analyzed and is unchanged, THEN THE Privacy_Tool SHALL serve the cached Policy_Summary from the Policy_Database
-7. WHEN a Policy_Summary is generated, THE Privacy_Tool SHALL store the anonymized Policy_Summary, extracted Privacy_Options, and Opt_Out_Methods in the global Policy_Database for use by other Privacy_Tool users
-8. THE Privacy_Tool SHALL not include any user-identifying information when storing data in the global Policy_Database
+2. WHEN the Privacy_Tool detects that a User is in a signup flow or encounters a hyperlink leading to a Terms of Service or privacy policy, THE Privacy_Tool SHALL automatically initiate Policy_Document analysis without requiring manual action from the User
+3. THE Policy_Summary SHALL organize all identified data practices into the following Data_Categories: Health, Purchases, Financial, Location, Contact Info, Contacts, User Content, Search, Browsing, Identifiers, Usage Data, Sensitive Info, Diagnostics, and Other Data
+4. THE Policy_Summary SHALL classify each Data_Category using a Data_Collection_Category color code: Grey for not collected, Blue for collected, Yellow for collected and shared with third parties, Red for collected and sold to third parties
+5. THE Policy_Summary SHALL display all Data_Categories with their corresponding Data_Collection_Category color codes in a visual summary grid
+6. THE Policy_Summary SHALL identify and list all Privacy_Options found in the Policy_Document, including data collection practices, sharing arrangements, and tracking mechanisms
+7. THE Policy_Summary SHALL highlight clauses that are unusually broad, grant excessive data access, or deviate from industry-standard privacy practices
+8. WHEN a Policy_Document contains ambiguous or vague language about data usage, THE AI_Engine SHALL flag those sections with a warning in the Policy_Summary
+9. THE AI_Engine SHALL assign a privacy risk rating to each identified Privacy_Option on a scale of low, medium, and high based on the scope of data affected
+10. IF the Policy_Document has been previously analyzed and is unchanged, THEN THE Privacy_Tool SHALL serve the cached Policy_Summary from the Policy_Database
+11. WHEN a Policy_Summary is generated, THE Privacy_Tool SHALL store the anonymized Policy_Summary, extracted Privacy_Options, and Opt_Out_Methods in the global Policy_Database for use by other Privacy_Tool users
+12. THE Privacy_Tool SHALL not include any user-identifying information when storing data in the global Policy_Database
 
 ### Requirement 3: AI Engine Configuration
 
@@ -92,7 +102,25 @@ The Privacy Customization Tool is a cross-platform privacy guardian that helps p
 4. THE Privacy_Tool SHALL display each applicable Privacy_Right with a plain-language explanation of what it entitles the User to do
 5. IF the Target_Service operates in a jurisdiction with weaker privacy protections than the User's jurisdiction, THEN THE Privacy_Tool SHALL inform the User of the stronger protections available to them
 
-### Requirement 6: Automated Privacy Rights Actions
+### Requirement 6: Privacy Policy Parsing
+
+**User Story:** As a User, I want the Privacy_Tool to accurately parse privacy policies from various formats, so that the analysis works regardless of how the policy is presented.
+
+#### Acceptance Criteria
+
+1. THE Privacy_Tool SHALL parse Policy_Documents from HTML web pages, PDF files, and plain text formats
+2. WHEN a Policy_Document is parsed, THE Privacy_Tool SHALL extract the full text content while preserving section structure and headings
+3. THE Privacy_Tool SHALL generate a structured representation of the parsed Policy_Document that can be serialized to JSON for storage in the Policy_Database
+4. FOR ALL valid Policy_Documents, parsing the document to a structured representation, serializing to JSON, deserializing from JSON, and comparing to the original structured representation SHALL produce an equivalent result (round-trip property)
+5. IF a Policy_Document format is not supported, THEN THE Privacy_Tool SHALL inform the User and provide a manual text input option as a fallback
+
+---
+
+## Phase 2: Recommended
+
+These requirements significantly enhance the tool's value and should be implemented after the core is stable.
+
+### Requirement 7: Automated Privacy Rights Actions
 
 **User Story:** As a User, I want the Privacy_Tool to act on my behalf to exercise my legal privacy rights, so that I can opt out of data collection without navigating complex processes myself.
 
@@ -106,7 +134,7 @@ The Privacy Customization Tool is a cross-platform privacy guardian that helps p
 6. IF a Rights_Action submission fails, THEN THE Privacy_Tool SHALL notify the User with the failure reason and provide manual instructions to complete the request
 7. WHEN a User initiates a Rights_Action, THE Privacy_Tool SHALL require explicit User confirmation via an Alert_Popup before sending any request to a Target_Service
 
-### Requirement 7: Post-Signup Privacy Setup Guides
+### Requirement 8: Post-Signup Privacy Setup Guides
 
 **User Story:** As a User, I want step-by-step instructions to maximize my privacy settings after creating an account on a new service, so that I can lock down my account immediately.
 
@@ -118,7 +146,7 @@ The Privacy Customization Tool is a cross-platform privacy guardian that helps p
 4. WHEN a Target_Service updates its settings interface, THE Privacy_Tool SHALL flag the Privacy_Setup_Guide as potentially outdated and queue it for re-analysis
 5. IF the Privacy_Tool has no existing Privacy_Setup_Guide for a Target_Service, THEN THE AI_Engine SHALL generate a guide based on the analyzed Policy_Document and common privacy settings patterns
 
-### Requirement 8: Security Track Record Research
+### Requirement 9: Security Track Record Research
 
 **User Story:** As a User, I want to see the security history of a service before I sign up, so that I can make informed decisions about trusting them with my data.
 
@@ -131,7 +159,7 @@ The Privacy Customization Tool is a cross-platform privacy guardian that helps p
 5. WHEN a Target_Service that the User has previously interacted with is found in a new breach report, THE Privacy_Tool SHALL send a system notification alerting the User immediately
 6. IF no security incidents are found for a Target_Service, THEN THE Security_Report SHALL state that no known incidents were found and note the date of the search
 
-### Requirement 9: Alternative Privacy-Respecting Services
+### Requirement 10: Alternative Privacy-Respecting Services
 
 **User Story:** As a User, I want to see alternative services with better privacy practices, so that I can choose privacy-respecting options when available.
 
@@ -139,24 +167,10 @@ The Privacy Customization Tool is a cross-platform privacy guardian that helps p
 
 1. WHEN a Policy_Document analysis reveals high-risk Privacy_Options, THE Privacy_Tool SHALL automatically suggest Alternative_Services that provide similar functionality with stronger privacy protections as part of the Policy_Summary
 2. WHILE the AI_Engine is generating a Policy_Summary, THE Privacy_Tool SHALL query the Policy_Database for known Alternative_Services related to the Target_Service and include them in the analysis results
-2. THE Privacy_Tool SHALL describe each Alternative_Service with a comparison of privacy practices, key features, and any tradeoffs in functionality
-3. THE Privacy_Tool SHALL source Alternative_Service recommendations from the Policy_Database, which is curated and updated by the Privacy_Tool team
-4. WHEN an Alternative_Service is suggested, THE Privacy_Tool SHALL display the Alternative_Service's privacy risk rating alongside the Target_Service's rating for comparison
-5. IF no Alternative_Services are available for a Target_Service category, THEN THE Privacy_Tool SHALL inform the User that no alternatives were found
-
-### Requirement 10: Automated Tasks and Reminders
-
-**User Story:** As a User, I want to set up automated reminders and scheduled privacy tasks, so that I stay on top of my privacy without constant manual effort.
-
-#### Acceptance Criteria
-
-1. WHEN a User creates an Automated_Task, THE Privacy_Tool SHALL allow the User to specify the task type, the Target_Service or Privacy_Option it relates to, and the schedule
-2. THE Privacy_Tool SHALL support the following Automated_Task types: periodic re-analysis of a previously analyzed Policy_Document, scheduled Rights_Action submission, and deadline reminder
-3. WHEN an Automated_Task is created, THE Privacy_Tool SHALL offer to export the task schedule as a Calendar_Event to the User's calendar application
-4. WHEN a deadline-based Automated_Task is approaching, THE Privacy_Tool SHALL display periodic Alert_Popups and system notifications as the deadline gets closer
-5. WHEN a scheduled re-analysis detects changes in a Policy_Document, THE Privacy_Tool SHALL display an Alert_Popup with a summary of what changed
-6. IF an Automated_Task fails to execute, THEN THE Privacy_Tool SHALL retry the task once after 15 minutes and notify the User via an Alert_Popup if the retry also fails
-7. WHEN a User views the Automated_Task list, THE Privacy_Tool SHALL display all active tasks with their next scheduled execution time and current status
+3. THE Privacy_Tool SHALL describe each Alternative_Service with a comparison of privacy practices, key features, and any tradeoffs in functionality
+4. THE Privacy_Tool SHALL source Alternative_Service recommendations from the Policy_Database, which is curated and updated by the Privacy_Tool team
+5. WHEN an Alternative_Service is suggested, THE Privacy_Tool SHALL display the Alternative_Service's privacy risk rating alongside the Target_Service's rating for comparison
+6. IF no Alternative_Services are available for a Target_Service category, THEN THE Privacy_Tool SHALL inform the User that no alternatives were found
 
 ### Requirement 11: Revisit Alerts for Policy Changes
 
@@ -170,19 +184,42 @@ The Privacy Customization Tool is a cross-platform privacy guardian that helps p
 4. IF the Policy_Document has not changed since the last analysis, THEN THE Privacy_Tool SHALL not display a Revisit_Alert
 5. WHEN a Policy_Document change introduces a new high-risk Privacy_Option, THE Privacy_Tool SHALL escalate the Alert_Popup to a prominent full-screen warning
 
-### Requirement 12: Privacy Policy Parsing
+---
 
-**User Story:** As a User, I want the Privacy_Tool to accurately parse privacy policies from various formats, so that the analysis works regardless of how the policy is presented.
+## Phase 3: Optional
+
+These requirements add polish and advanced capabilities. They can be implemented based on user demand and available resources.
+
+### Requirement 12: Automated Tasks and Reminders
+
+**User Story:** As a User, I want to set up automated reminders and scheduled privacy tasks, so that I stay on top of my privacy without constant manual effort.
 
 #### Acceptance Criteria
 
-1. THE Privacy_Tool SHALL parse Policy_Documents from HTML web pages, PDF files, and plain text formats
-2. WHEN a Policy_Document is parsed, THE Privacy_Tool SHALL extract the full text content while preserving section structure and headings
-3. THE Privacy_Tool SHALL generate a structured representation of the parsed Policy_Document that can be serialized to JSON for storage in the Policy_Database
-4. FOR ALL valid Policy_Documents, parsing the document to a structured representation, serializing to JSON, deserializing from JSON, and comparing to the original structured representation SHALL produce an equivalent result (round-trip property)
-5. IF a Policy_Document format is not supported, THEN THE Privacy_Tool SHALL inform the User and provide a manual text input option as a fallback
+1. WHEN a User creates an Automated_Task, THE Privacy_Tool SHALL allow the User to specify the task type, the Target_Service or Privacy_Option it relates to, and the schedule
+2. THE Privacy_Tool SHALL support the following Automated_Task types: periodic re-analysis of a previously analyzed Policy_Document, scheduled Rights_Action submission, and deadline reminder
+3. WHEN an Automated_Task is created, THE Privacy_Tool SHALL offer to export the task schedule as a Calendar_Event to the User's calendar application
+4. WHEN a deadline-based Automated_Task is approaching, THE Privacy_Tool SHALL display periodic Alert_Popups and system notifications as the deadline gets closer
+5. WHEN a scheduled re-analysis detects changes in a Policy_Document, THE Privacy_Tool SHALL display an Alert_Popup with a summary of what changed
+6. IF an Automated_Task fails to execute, THEN THE Privacy_Tool SHALL retry the task once after 15 minutes and notify the User via an Alert_Popup if the retry also fails
+7. WHEN a User views the Automated_Task list, THE Privacy_Tool SHALL display all active tasks with their next scheduled execution time and current status
 
-### Requirement 13: System-Level Agent (Stretch Goal)
+### Requirement 13: Search, Filtering, and Export of Analyzed Policies
+
+**User Story:** As a User, I want to search, filter, and export my previously analyzed policy summaries, so that I can quickly find information about a specific service and share or save summaries for my records.
+
+#### Acceptance Criteria
+
+1. THE Privacy_Tool SHALL provide a searchable library view listing all previously analyzed Policy_Documents with their Target_Service name, analysis date, and overall risk rating
+2. THE Privacy_Tool SHALL provide a search input that filters previously analyzed Policy_Documents by Target_Service name, privacy risk rating, Data_Category, or Privacy_Option keyword
+3. WHEN a User enters a search query, THE Privacy_Tool SHALL display matching results within 500 milliseconds
+4. THE Privacy_Tool SHALL provide filter controls to show policies by risk level (low, medium, high), by Data_Collection_Category color code, and by analysis date range
+5. WHEN a User selects a Policy_Summary from the library, THE Privacy_Tool SHALL display the full summary including the Data_Category grid, Privacy_Options, Opt_Out_Methods, and risk ratings
+6. THE Privacy_Tool SHALL allow a User to export a Policy_Summary as a PDF or JSON file
+7. WHEN a User exports a Policy_Summary, THE Privacy_Tool SHALL include the Target_Service name, analysis date, Data_Category grid, all Privacy_Options, Opt_Out_Methods, and applicable Privacy_Rights in the export
+8. WHEN no results match a search query, THE Privacy_Tool SHALL display a message indicating no results were found
+
+### Requirement 14: System-Level Agent (Stretch Goal)
 
 **User Story:** As a User, I want the Privacy_Tool to detect privacy policy prompts in locally installed desktop applications, so that I have the same privacy protection outside the browser.
 
@@ -193,14 +230,3 @@ The Privacy Customization Tool is a cross-platform privacy guardian that helps p
 3. WHEN a User accepts the analysis offer, THE System_Agent SHALL extract the policy text and pass it to the AI_Engine for analysis
 4. THE System_Agent SHALL synchronize analyzed Policy_Documents and User preferences with the browser extension via local encrypted storage
 5. IF the System_Agent cannot detect or extract a policy prompt, THEN THE System_Agent SHALL provide a manual input option for the User to paste the policy text
-
-### Requirement 14: Search and Filtering of Analyzed Policies
-
-**User Story:** As a User, I want to search and filter my previously analyzed policies, so that I can quickly find information about a specific service.
-
-#### Acceptance Criteria
-
-1. THE Privacy_Tool SHALL provide a search input that filters previously analyzed Policy_Documents by Target_Service name, privacy risk rating, or Privacy_Option keyword
-2. WHEN a User enters a search query, THE Privacy_Tool SHALL display matching results within 500 milliseconds
-3. THE Privacy_Tool SHALL provide filter controls to show policies by risk level (low, medium, high) and by analysis date range
-4. WHEN no results match a search query, THE Privacy_Tool SHALL display a message indicating no results were found
