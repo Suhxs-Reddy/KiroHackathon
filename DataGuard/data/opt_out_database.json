@@ -1,0 +1,265 @@
+[
+  {
+    "domain": "google.com",
+    "data_usage": "shared",
+    "opt_out_url": "https://myaccount.google.com/data-and-privacy",
+    "method": "account_deletion_only",
+    "difficulty": "medium",
+    "estimated_time": "10 minutes",
+    "alternatives": [
+      { "text": "Limit ad personalization via Data & Privacy dashboard", "url": "https://myaccount.google.com/data-and-privacy" },
+      { "text": "Download your data via Google Takeout before deleting", "url": "https://takeout.google.com" },
+      { "text": "Switch to a privacy-focused search engine like DuckDuckGo", "url": "https://duckduckgo.com" }
+    ],
+    "notes": "Account deletion is permanent and removes access to all Google services."
+  },
+  {
+    "domain": "facebook.com",
+    "data_usage": "sold",
+    "opt_out_url": "https://www.facebook.com/help/delete_account",
+    "method": "account_deletion_only",
+    "difficulty": "hard",
+    "estimated_time": "30 days to fully process",
+    "alternatives": [
+      { "text": "Deactivate instead of delete to preserve data temporarily", "url": "https://www.facebook.com/deactivate" },
+      { "text": "Limit tracking via Off-Facebook Activity tool", "url": "https://www.facebook.com/off_facebook_activity" },
+      { "text": "Use Facebook Container extension (Firefox)", "url": "https://addons.mozilla.org/en-US/firefox/addon/facebook-container/" }
+    ],
+    "notes": "Meta retains some data for legal compliance even after deletion."
+  },
+  {
+    "domain": "twitter.com",
+    "data_usage": "shared",
+    "opt_out_url": "https://twitter.com/settings/account/deactivate",
+    "method": "account_deletion_only",
+    "difficulty": "easy",
+    "estimated_time": "5 minutes",
+    "alternatives": [
+      { "text": "Download your archive before deactivating", "url": "https://twitter.com/settings/download_your_data" },
+      { "text": "Revoke third-party app access before deletion", "url": "https://twitter.com/settings/connected_apps" }
+    ],
+    "notes": "Account is deactivated for 30 days before permanent deletion."
+  },
+  {
+    "domain": "x.com",
+    "data_usage": "shared",
+    "opt_out_url": "https://twitter.com/settings/account/deactivate",
+    "method": "account_deletion_only",
+    "difficulty": "easy",
+    "estimated_time": "5 minutes",
+    "alternatives": [
+      { "text": "Download your archive before deactivating", "url": "https://twitter.com/settings/download_your_data" },
+      { "text": "Revoke third-party app access before deletion", "url": "https://twitter.com/settings/connected_apps" }
+    ],
+    "notes": "Account is deactivated for 30 days before permanent deletion."
+  },
+  {
+    "domain": "instagram.com",
+    "data_usage": "sold",
+    "opt_out_url": "https://www.instagram.com/accounts/remove/request/permanent/",
+    "method": "account_deletion_only",
+    "difficulty": "medium",
+    "estimated_time": "30 days to fully process",
+    "alternatives": [
+      { "text": "Temporarily disable account instead of deleting", "url": "https://www.instagram.com/accounts/remove/request/temporary/" },
+      { "text": "Download your data before deleting", "url": "https://www.instagram.com/download/request/" }
+    ],
+    "notes": "Must be done via mobile app or web — not available in the main settings menu."
+  },
+  {
+    "domain": "linkedin.com",
+    "data_usage": "shared",
+    "opt_out_url": "https://www.linkedin.com/psettings/account",
+    "method": "account_deletion_only",
+    "difficulty": "medium",
+    "estimated_time": "20 minutes",
+    "alternatives": [
+      { "text": "Download your data before closing the account", "url": "https://www.linkedin.com/psettings/member-data" },
+      { "text": "Adjust privacy settings to limit profile visibility", "url": "https://www.linkedin.com/psettings/privacy" }
+    ],
+    "notes": "LinkedIn retains some data for safety and legal purposes."
+  },
+  {
+    "domain": "amazon.com",
+    "data_usage": "sold",
+    "opt_out_url": "https://www.amazon.com/privacy/data-deletion",
+    "method": "form",
+    "difficulty": "hard",
+    "estimated_time": "30+ days",
+    "alternatives": [
+      { "text": "Opt out of personalized ads via Ad Preferences", "url": "https://www.amazon.com/adprefs" },
+      { "text": "Submit a CCPA/GDPR data request", "url": "https://www.amazon.com/gp/help/customer/display.html?nodeId=GQFYXZHZB2DUQD7J" },
+      { "text": "Manage Alexa privacy settings", "url": "https://www.amazon.com/alexaprivacysettings" }
+    ],
+    "notes": "Full account deletion requires contacting customer service. Some order history is retained for legal reasons."
+  },
+  {
+    "domain": "github.com",
+    "data_usage": "collected",
+    "opt_out_url": "https://github.com/settings/admin",
+    "method": "account_deletion_only",
+    "difficulty": "easy",
+    "estimated_time": "5 minutes",
+    "alternatives": [
+      { "text": "Export your repositories and data before deleting", "url": "https://github.com/settings/admin#export-data" },
+      { "text": "Revoke OAuth app access before deletion", "url": "https://github.com/settings/applications" }
+    ],
+    "notes": "Deleting your account removes all repositories, gists, and profile data."
+  },
+  {
+    "domain": "reddit.com",
+    "data_usage": "shared",
+    "opt_out_url": "https://www.reddit.com/settings/",
+    "method": "account_deletion_only",
+    "difficulty": "easy",
+    "estimated_time": "5 minutes",
+    "alternatives": [
+      { "text": "Opt out of personalized ads in Reddit settings", "url": "https://www.reddit.com/settings/privacy" },
+      { "text": "Request your data via Reddit's data portal", "url": "https://www.reddit.com/settings/data-request" }
+    ],
+    "notes": "Posts and comments remain visible after account deletion unless manually removed first."
+  },
+  {
+    "domain": "netflix.com",
+    "data_usage": "shared",
+    "opt_out_url": "https://help.netflix.com/en/node/100625",
+    "method": "support_ticket",
+    "difficulty": "medium",
+    "estimated_time": "10 months (data retention period)",
+    "alternatives": [
+      { "text": "Cancel your subscription first", "url": "https://www.netflix.com/cancelplan" },
+      { "text": "Opt out of marketing emails in account settings", "url": "https://www.netflix.com/account/emailpreferences" }
+    ],
+    "notes": "Netflix retains data for up to 10 months after account closure."
+  },
+  {
+    "domain": "spotify.com",
+    "data_usage": "shared",
+    "opt_out_url": "https://support.spotify.com/us/article/close-account/",
+    "method": "support_ticket",
+    "difficulty": "medium",
+    "estimated_time": "7 days",
+    "alternatives": [
+      { "text": "Download your data before closing the account", "url": "https://www.spotify.com/account/privacy/" },
+      { "text": "Revoke third-party app access in account settings", "url": "https://www.spotify.com/account/apps/" }
+    ],
+    "notes": "Playlists and listening history are permanently deleted."
+  },
+  {
+    "domain": "apple.com",
+    "data_usage": "collected",
+    "opt_out_url": "https://privacy.apple.com/",
+    "method": "form",
+    "difficulty": "medium",
+    "estimated_time": "7 days",
+    "alternatives": [
+      { "text": "Download your Apple data first via Privacy portal", "url": "https://privacy.apple.com/" },
+      { "text": "Deactivate Apple ID temporarily instead of deleting", "url": "https://support.apple.com/en-us/HT208504" }
+    ],
+    "notes": "Deleting your Apple ID removes access to all Apple services and purchases."
+  },
+  {
+    "domain": "microsoft.com",
+    "data_usage": "shared",
+    "opt_out_url": "https://account.microsoft.com/account/privacy",
+    "method": "account_deletion_only",
+    "difficulty": "medium",
+    "estimated_time": "60 days",
+    "alternatives": [
+      { "text": "Manage your data via Microsoft Privacy Dashboard", "url": "https://account.microsoft.com/privacy" },
+      { "text": "Opt out of personalized ads", "url": "https://account.microsoft.com/privacy/ad-settings" }
+    ],
+    "notes": "Account closure has a 60-day grace period before permanent deletion."
+  },
+  {
+    "domain": "paypal.com",
+    "data_usage": "shared",
+    "opt_out_url": "https://www.paypal.com/myaccount/privacy/privacyhub",
+    "method": "support_ticket",
+    "difficulty": "hard",
+    "estimated_time": "30+ days",
+    "alternatives": [
+      { "text": "Contact PayPal support to initiate account closure", "url": "https://www.paypal.com/us/smarthelp/contact-us" },
+      { "text": "Review PayPal's privacy settings", "url": "https://www.paypal.com/myaccount/privacy/privacyhub" }
+    ],
+    "notes": "PayPal retains transaction records for legal and regulatory compliance."
+  },
+  {
+    "domain": "uber.com",
+    "data_usage": "sold",
+    "opt_out_url": "https://help.uber.com/riders/article/delete-your-uber-account",
+    "method": "form",
+    "difficulty": "medium",
+    "estimated_time": "30 days",
+    "alternatives": [
+      { "text": "Manage privacy settings in the Uber app", "url": "https://privacy.uber.com/privacy/center" },
+      { "text": "Submit a GDPR/CCPA data request", "url": "https://privacy.uber.com/privacy/center" }
+    ],
+    "notes": "Trip history may be retained for legal and safety purposes."
+  },
+  {
+    "domain": "airbnb.com",
+    "data_usage": "shared",
+    "opt_out_url": "https://www.airbnb.com/help/article/3293",
+    "method": "support_ticket",
+    "difficulty": "medium",
+    "estimated_time": "14 days",
+    "alternatives": [
+      { "text": "Download your Airbnb data before requesting deletion", "url": "https://www.airbnb.com/account-settings/privacy-and-sharing" },
+      { "text": "Contact Airbnb support via the Help Center", "url": "https://www.airbnb.com/help/contact_us" }
+    ],
+    "notes": "Reviews you've written may remain visible after account deletion."
+  },
+  {
+    "domain": "dropbox.com",
+    "data_usage": "collected",
+    "opt_out_url": "https://www.dropbox.com/account/delete",
+    "method": "account_deletion_only",
+    "difficulty": "easy",
+    "estimated_time": "5 minutes",
+    "alternatives": [
+      { "text": "Download all your files before deleting", "url": "https://www.dropbox.com/account" },
+      { "text": "Revoke third-party app access first", "url": "https://www.dropbox.com/account/connected_apps" }
+    ],
+    "notes": "Files are permanently deleted after a 30-day grace period."
+  },
+  {
+    "domain": "slack.com",
+    "data_usage": "collected",
+    "opt_out_url": "https://slack.com/help/articles/203953146",
+    "method": "account_deletion_only",
+    "difficulty": "medium",
+    "estimated_time": "7 days",
+    "alternatives": [
+      { "text": "Export your messages before leaving workspaces", "url": "https://slack.com/help/articles/201658943" },
+      { "text": "Review Slack's privacy controls", "url": "https://slack.com/account/settings" }
+    ],
+    "notes": "Workspace admins may retain message history even after you leave."
+  },
+  {
+    "domain": "zoom.us",
+    "data_usage": "shared",
+    "opt_out_url": "https://support.zoom.us/hc/en-us/articles/201363243",
+    "method": "account_deletion_only",
+    "difficulty": "easy",
+    "estimated_time": "5 minutes",
+    "alternatives": [
+      { "text": "Opt out of data sharing in Zoom privacy settings", "url": "https://zoom.us/profile/setting" },
+      { "text": "Submit a GDPR/CCPA request via Zoom's privacy portal", "url": "https://zoom.us/docs/en-us/privacy-and-legal.html" }
+    ],
+    "notes": "Meeting recordings stored in Zoom Cloud are deleted with the account."
+  },
+  {
+    "domain": "tiktok.com",
+    "data_usage": "sold",
+    "opt_out_url": "https://support.tiktok.com/en/account-and-privacy/deleting-an-account",
+    "method": "account_deletion_only",
+    "difficulty": "easy",
+    "estimated_time": "30 days",
+    "alternatives": [
+      { "text": "Download your TikTok data before deleting", "url": "https://www.tiktok.com/setting/download-your-data" },
+      { "text": "Opt out of personalized ads in privacy settings", "url": "https://www.tiktok.com/setting/privacy" }
+    ],
+    "notes": "Account is deactivated for 30 days before permanent deletion."
+  }
+]

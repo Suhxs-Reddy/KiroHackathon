@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataGuard</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Loading state -->
+    <div id="loading" class="loading-screen">
+      <div class="spinner"></div>
+      <p>Scanning page…</p>
+    </div>
+
+    <!-- Error state -->
+    <div id="error-screen" class="error-screen hidden">
+      <span class="error-icon">⚠️</span>
+      <p id="error-message">Unable to scan this page.</p>
+      <p class="error-hint">DataGuard can't run on browser internal pages (chrome://, about:, etc.).</p>
+    </div>
+
+    <!-- Main content -->
+    <div id="main" class="hidden">
+
+      <!-- ── Header ── -->
+      <header class="header">
+        <div class="site-info">
+          <img id="favicon" class="favicon" src="" alt="" />
+          <div class="site-text">
+            <span id="domain-name" class="domain-name"></span>
+            <span id="company-name" class="company-name"></span>
+          </div>
+        </div>
+        <div id="risk-badge" class="risk-badge">
+          <span id="risk-icon" class="risk-icon"></span>
+          <span id="risk-label" class="risk-label"></span>
+        </div>
+      </header>
+
+      <!-- ── Section 1: What this site collects ── -->
+      <section class="section" id="section-collects">
+        <h2 class="section-title">
+          <span class="section-icon">📋</span>
+          What this site collects
+        </h2>
+        <div id="no-fields" class="no-fields hidden">
+          <span class="check-icon">✓</span>
+          No data input fields detected on this page.
+        </div>
+        <div id="category-pills" class="category-pills"></div>
+      </section>
+
+      <!-- ── Section 2: Why we flagged it ── -->
+      <section class="section" id="section-reasons">
+        <h2 class="section-title">
+          <span class="section-icon">⚠️</span>
+          Why we flagged it
+        </h2>
+        <ul id="reason-list" class="reason-list"></ul>
+      </section>
+
+      <!-- ── Section 3: Breach history ── -->
+      <section class="section" id="section-breaches">
+        <h2 class="section-title">
+          <span class="section-icon">🔓</span>
+          Breach history
+        </h2>
+        <div class="breach-tabs">
+          <button class="tab-btn active" data-tab="domain-breaches">This site</button>
+          <button class="tab-btn" data-tab="category-breaches">This data type</button>
+        </div>
+        <div id="domain-breaches" class="tab-panel">
+          <div id="domain-breach-list" class="breach-list"></div>
+        </div>
+        <div id="category-breaches" class="tab-panel hidden">
+          <div id="category-breach-list" class="breach-list"></div>
+        </div>
+      </section>
+
+      <!-- ── Section 4: Opt-out ── -->
+      <section class="section" id="section-optout">
+        <h2 class="section-title">
+          <span class="section-icon">🚪</span>
+          How to opt out
+        </h2>
+        <div id="optout-content"></div>
+      </section>
+
+      <!-- ── Footer ── -->
+      <footer class="footer">
+        <span id="scan-time" class="scan-time"></span>
+        <div class="footer-actions">
+          <div class="bookmark-wrapper">
+            <button id="bookmark-btn" class="bookmark-btn">
+              🔖 Bookmark
+            </button>
+            <div class="bookmark-tooltip">
+              Save this site to your watch list. DataGuard will notify you if a new data breach is detected here.
+            </div>
+          </div>
+          <a href="#" id="settings-link" class="settings-link" title="Settings">⚙️ Settings</a>
+        </div>
+      </footer>
+
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
