@@ -1,4 +1,4 @@
-import { Parsed_Policy, Risk_Analysis, RiskLevel, AnalysisError, LLMAdapter } from './types.js';
+import { Parsed_Policy, Risk_Analysis, RiskLevel, AnalysisError, LLMAdapter, DataCategoryGridItem } from './types.js';
 
 // ─── Risk_Analysis Validation (CSP-safe, no eval) ────────────────────────────
 
@@ -364,6 +364,13 @@ function buildSystemPrompt(): string {
 You MUST respond with a single valid JSON object that conforms exactly to this schema:
 
 {
+  "dataCategoryGrid": [
+    {
+      "category": "<one of: Health, Purchases, Financial, Location, Contact Info, Contacts, User Content, Search, Browsing, Identifiers, Usage Data, Sensitive Info, Diagnostics, Other Data>",
+      "collectionStatus": "<'grey' | 'blue' | 'yellow' | 'red'>",
+      "label": "<short plain-language label describing what is collected>"
+    }
+  ],
   "dataTypes": [
     {
       "dataType": "<string: category of personal data, e.g. 'location data'>",
@@ -389,6 +396,14 @@ You MUST respond with a single valid JSON object that conforms exactly to this s
   ],
   "analysisWarnings": ["<string: top-level issues, e.g. policy text was truncated>"]
 }
+
+Data Category Grid rules (dataCategoryGrid):
+- You MUST include ALL 14 categories in the grid: Health, Purchases, Financial, Location, Contact Info, Contacts, User Content, Search, Browsing, Identifiers, Usage Data, Sensitive Info, Diagnostics, Other Data
+- Set collectionStatus to "grey" if the policy does NOT mention collecting this type of data
+- Set collectionStatus to "blue" if the policy says this data IS collected but NOT shared or sold
+- Set collectionStatus to "yellow" if the policy says this data is collected AND shared with third parties
+- Set collectionStatus to "red" if the policy says this data is collected AND sold to third parties
+- The label should be a short description (e.g., "Not collected", "Collected for analytics", "Shared with ad partners", "Sold to data brokers")
 
 Risk level assignment rules:
 - HIGH: biometric data, precise location, health/medical data, financial account data, government ID numbers, data sold to third parties, data used for profiling
@@ -470,7 +485,7 @@ async function parseAndValidateResponse(
   systemPrompt: string,
   userMessage: string,
   retryCount: number = 0
-): Promise<{ dataTypes: Risk_Analysis['dataTypes']; analysisWarnings: string[] }> {
+): Promise<{ dataTypes: Risk_Analysis['dataTypes']; analysisWarnings: string[]; dataCategoryGrid?: Risk_Analysis['dataCategoryGrid'] }> {
   try {
     const parsed = JSON.parse(responseText);
 
@@ -549,7 +564,7 @@ export async function analyzePolicy(parsed: Parsed_Policy): Promise<Risk_Analysi
   const responseText = await adapter.complete(systemPrompt, userMessage);
 
   // Validate and parse
-  const { dataTypes, analysisWarnings } = await parseAndValidateResponse(
+  const { dataTypes, analysisWarnings, dataCategoryGrid } = await parseAndValidateResponse(
     responseText,
     adapter,
     systemPrompt,
@@ -570,6 +585,7 @@ export async function analyzePolicy(parsed: Parsed_Policy): Promise<Risk_Analysi
     targetDomain,
     analyzedAt: new Date().toISOString(),
     overallRiskLevel,
+    dataCategoryGrid: dataCategoryGrid || [],
     dataTypes,
     analysisWarnings,
     modelUsed: adapter.modelId,

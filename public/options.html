@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>DataGuard Settings</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --text: #1F2937; --text-muted: #6B7280; --bg: #fff; --bg-section: #F9FAFB;
+      --border: #E5E7EB; --green: #059669; --green-bg: #ECFDF5; --blue: #2563EB;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --text: #F3F4F6; --text-muted: #9CA3AF; --bg: #111827; --bg-section: #1F2937; --border: #374151; }
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; color: var(--text); background: var(--bg); max-width: 520px; margin: 0 auto; padding: 32px 24px; }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 28px; }
+    .section { background: var(--bg-section); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .section h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 14px; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .row:last-child { border-bottom: none; }
+    .row-label { font-size: 13px; }
+    .row-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .btn { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; font-weight: 500; cursor: pointer; }
+    .btn:hover { background: var(--bg-section); }
+    .btn.primary { background: var(--green); color: #fff; border-color: var(--green); }
+    .btn.primary:hover { opacity: 0.88; }
+    .status { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+    .status.ok { color: var(--green); }
+    .status.error { color: #DC2626; }
+    footer { font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 24px; }
+    .bookmarks-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .bookmark-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+    .bookmark-domain { font-size: 13px; font-weight: 600; color: var(--text); }
+    .bookmark-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .bookmark-remove { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 11px; color: var(--text-muted); cursor: pointer; }
+    .bookmark-remove:hover { border-color: #DC2626; color: #DC2626; }
+    .empty-bookmarks { font-size: 13px; color: var(--text-muted); text-align: center; padding: 16px 0; }
+    .section-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px; }
+    .form-group input, .form-group select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--bg); color: var(--text); }
+    .checkbox-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+    .checkbox-row input[type="checkbox"] { width: 16px; height: 16px; }
+    .checkbox-row label { font-size: 13px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>&#x1F6E1;&#xFE0F; DataGuard Settings</h1>
+  <p class="subtitle">Configure how DataGuard protects your privacy.</p>
+
+  <!-- AI Engine Configuration (Req 3) -->
+  <div class="section">
+    <h2>&#x1F916; AI Engine Configuration</h2>
+    <p class="section-desc">Configure the AI model used to analyze privacy policies. Your API key is stored locally and never shared.</p>
+    <div class="form-group">
+      <label for="adapter-type">AI Model Provider:</label>
+      <select id="adapter-type">
+        <option value="saulm">HuggingFace (Llama 3.1) &mdash; Free tier available</option>
+        <option value="openai">OpenAI GPT-4o</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="api-key">API Key:</label>
+      <input type="password" id="api-key" placeholder="Enter your API key" />
+    </div>
+    <button class="btn primary" id="save-ai-btn">Save &amp; Validate</button>
+    <div id="ai-status" class="status" style="display: none;"></div>
+  </div>
+
+  <!-- Jurisdiction (Req 5.1) -->
+  <div class="section">
+    <h2>&#x2696;&#xFE0F; Your Jurisdiction</h2>
+    <p class="section-desc">Select the privacy laws that apply to you based on your location. This determines which rights DataGuard shows you.</p>
+    <div id="jurisdiction-checkboxes"></div>
+    <button class="btn primary" id="save-jurisdiction-btn" style="margin-top: 12px;">Save Jurisdiction</button>
+    <div id="jurisdiction-status" class="status" style="display: none;"></div>
+  </div>
+
+  <!-- Bookmarked Sites -->
+  <div class="section">
+    <h2>&#x1F516; Bookmarked Sites</h2>
+    <p class="section-desc">Sites you've bookmarked are monitored for new breaches. You'll get a notification if a new breach is detected.</p>
+    <div id="bookmarks-list" class="bookmarks-list">
+      <p class="status">Loading&hellip;</p>
+    </div>
+  </div>
+
+  <!-- Breach Database -->
+  <div class="section">
+    <h2>&#x1F513; Breach Database</h2>
+    <div class="row">
+      <div>
+        <div class="row-label">Breach cache status</div>
+        <div class="row-desc">Cached locally from Have I Been Pwned. Refreshed weekly.</div>
+      </div>
+      <button class="btn primary" id="refresh-btn">Refresh now</button>
+    </div>
+    <div id="cache-status" class="status">Checking&hellip;</div>
+  </div>
+
+  <!-- Privacy -->
+  <div class="section">
+    <h2>&#x1F512; Privacy</h2>
+    <div class="row">
+      <div>
+        <div class="row-label">No analytics or telemetry</div>
+        <div class="row-desc">DataGuard never sends usage data anywhere. Ever.</div>
+      </div>
+      <span>&#x2713;</span>
+    </div>
+    <div class="row">
+      <div>
+        <div class="row-label">No field value reading</div>
+        <div class="row-desc">Only field presence is detected &mdash; never what you type.</div>
+      </div>
+      <span>&#x2713;</span>
+    </div>
+    <div class="row">
+      <div>
+        <div class="row-label">All data stored locally</div>
+        <div class="row-desc">Breach data and settings live in chrome.storage.local.</div>
+      </div>
+      <span>&#x2713;</span>
+    </div>
+    <div class="row">
+      <div>
+        <div class="row-label">AI data sent only with your key</div>
+        <div class="row-desc">Policy text is only sent to the AI provider you configure. No other external calls.</div>
+      </div>
+      <span>&#x2713;</span>
+    </div>
+  </div>
+
+  <!-- About -->
+  <div class="section">
+    <h2>About</h2>
+    <div class="row">
+      <div class="row-label">Version</div>
+      <span style="font-size:12px;color:var(--text-muted)">0.1.0</span>
+    </div>
+    <div class="row">
+      <div class="row-label">Breach data source</div>
+      <a href="https://haveibeenpwned.com" target="_blank" rel="noopener" style="font-size:12px;color:#2563EB">Have I Been Pwned &#x2197;</a>
+    </div>
+  </div>
+
+  <footer>DataGuard is open source. No account required. No tracking.</footer>
+
+  <script src="options.js"></script>
+</body>
+</html>

@@ -1,106 +1,130 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy Tool Settings</title>
-  <style>
-    body {
-      width: 400px;
-      padding: 16px;
-      font-family: system-ui, -apple-system, sans-serif;
-      font-size: 14px;
-      margin: 0;
-    }
-    h2 {
-      margin: 0 0 16px 0;
-      font-size: 18px;
-    }
-    .form-group {
-      margin-bottom: 16px;
-    }
-    label {
-      display: block;
-      margin-bottom: 4px;
-      font-weight: 500;
-    }
-    input, select {
-      width: 100%;
-      padding: 8px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      box-sizing: border-box;
-    }
-    button {
-      width: 100%;
-      padding: 10px;
-      background: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: bold;
-      font-size: 14px;
-    }
-    button:hover {
-      background: #45a049;
-    }
-    button:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-    .message {
-      margin-top: 12px;
-      padding: 8px;
-      border-radius: 4px;
-      display: none;
-    }
-    .message.success {
-      background: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
-      display: block;
-    }
-    .message.error {
-      background: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
-      display: block;
-    }
-    .info {
-      margin-top: 16px;
-      padding: 12px;
-      background: #e7f3ff;
-      border-radius: 4px;
-      font-size: 12px;
-      color: #004085;
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataGuard</title>
+  <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <h2>🔒 Privacy Tool Settings</h2>
-  
-  <div class="form-group">
-    <label for="adapter-type">AI Model Provider:</label>
-    <select id="adapter-type">
-      <option value="saulm">SaulLM (HuggingFace) - Legal-specialized</option>
-      <option value="openai">OpenAI GPT-4o</option>
-    </select>
+  <div id="app">
+    <!-- Loading state -->
+    <div id="loading" class="loading-screen">
+      <div class="spinner"></div>
+      <p>Scanning page&hellip;</p>
+    </div>
+
+    <!-- Error state -->
+    <div id="error-screen" class="error-screen hidden">
+      <span class="error-icon">&#x26A0;&#xFE0F;</span>
+      <p id="error-message">Unable to scan this page.</p>
+      <p class="error-hint">DataGuard can't run on browser internal pages (chrome://, about:, etc.).</p>
+    </div>
+
+    <!-- Main content -->
+    <div id="main" class="hidden">
+
+      <!-- Header -->
+      <header class="header">
+        <div class="site-info">
+          <img id="favicon" class="favicon" src="" alt="" />
+          <div class="site-text">
+            <span id="domain-name" class="domain-name"></span>
+            <span id="company-name" class="company-name"></span>
+          </div>
+        </div>
+        <div id="risk-badge" class="risk-badge">
+          <span id="risk-icon" class="risk-icon"></span>
+          <span id="risk-label" class="risk-label"></span>
+        </div>
+      </header>
+
+      <!-- Section 1: What this site collects -->
+      <section class="section" id="section-collects">
+        <h2 class="section-title">
+          <span class="section-icon">&#x1F4CB;</span>
+          What this site collects
+        </h2>
+        <div id="no-fields" class="no-fields hidden">
+          <span class="check-icon">&#x2713;</span>
+          No data input fields detected on this page.
+        </div>
+        <div id="category-pills" class="category-pills"></div>
+      </section>
+
+      <!-- Section 2: Why we flagged it -->
+      <section class="section" id="section-reasons">
+        <h2 class="section-title">
+          <span class="section-icon">&#x26A0;&#xFE0F;</span>
+          Why we flagged it
+        </h2>
+        <ul id="reason-list" class="reason-list"></ul>
+      </section>
+
+      <!-- Section 3: Breach history -->
+      <section class="section" id="section-breaches">
+        <h2 class="section-title">
+          <span class="section-icon">&#x1F513;</span>
+          Breach history
+        </h2>
+        <div class="breach-tabs">
+          <button class="tab-btn active" data-tab="domain-breaches">This site</button>
+          <button class="tab-btn" data-tab="category-breaches">This data type</button>
+        </div>
+        <div id="domain-breaches" class="tab-panel">
+          <div id="domain-breach-list" class="breach-list"></div>
+        </div>
+        <div id="category-breaches" class="tab-panel hidden">
+          <div id="category-breach-list" class="breach-list"></div>
+        </div>
+      </section>
+
+      <!-- Section 4: AI Policy Analysis -->
+      <section class="section" id="section-analyze">
+        <h2 class="section-title">
+          <span class="section-icon">&#x1F916;</span>
+          AI Policy Analysis
+        </h2>
+        <div id="analyze-content"></div>
+      </section>
+
+      <!-- Section 5: How to opt out -->
+      <section class="section" id="section-optout">
+        <h2 class="section-title">
+          <span class="section-icon">&#x1F6AA;</span>
+          How to opt out
+        </h2>
+        <div id="optout-content"></div>
+      </section>
+
+      <!-- Section 6: Your Privacy Rights (Req 5) -->
+      <section class="section" id="section-rights">
+        <h2 class="section-title">
+          <span class="section-icon">&#x2696;&#xFE0F;</span>
+          Your Privacy Rights
+        </h2>
+        <div id="rights-content"></div>
+      </section>
+
+      <!-- Footer -->
+      <footer class="footer">
+        <span id="scan-time" class="scan-time"></span>
+        <div class="footer-actions">
+          <div class="bookmark-wrapper">
+            <button id="bookmark-btn" class="bookmark-btn">
+              &#x1F516; Bookmark
+            </button>
+            <div class="bookmark-tooltip">
+              Save this site to your watch list. DataGuard will notify you if a new data breach is detected here.
+            </div>
+          </div>
+          <a href="#" id="settings-link" class="settings-link" title="Settings">&#x2699;&#xFE0F; Settings</a>
+        </div>
+      </footer>
+
+    </div>
   </div>
 
-  <div class="form-group">
-    <label for="api-key">API Key:</label>
-    <input type="password" id="api-key" placeholder="Enter your API key">
-  </div>
-
-  <button id="save-btn">Save & Validate</button>
-
-  <div id="message" class="message"></div>
-
-  <div class="info">
-    <strong>Note:</strong> Your API key is stored locally in your browser and never sent to any server except the AI provider you selected.
-  </div>
-
-  <script type="module" src="../dist/popup.js"></script>
+  <script src="popup.js"></script>
 </body>
 </html>

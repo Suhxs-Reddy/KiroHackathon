@@ -1,6 +1,7 @@
 {
-  "name": "privacy-tool",
+  "name": "dataguard",
   "version": "0.1.0",
+  "description": "Privacy guardian browser extension — field detection, breach history, AI policy analysis, opt-out guidance, and jurisdiction-based rights.",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "@types/chrome": "0.0.268",
+    "@types/jsdom": "^28.0.1",
     "@types/node": "20.14.0",
     "fast-check": "3.21.0",
     "jsdom": "24.1.0",

@@ -76,9 +76,122 @@ export interface Risk_Analysis {
   targetDomain: string;
   analyzedAt: string; // ISO 8601
   overallRiskLevel: RiskLevel;
+  dataCategoryGrid: DataCategoryGridItem[];
   dataTypes: DataTypeEntry[];
   analysisWarnings: string[];
   modelUsed: string;
+}
+
+// ─── Field Classification Types (from DataGuard) ─────────────────────────────
+
+export type FieldCategoryId =
+  | 'FINANCIAL'
+  | 'GOVERNMENT_ID'
+  | 'AUTH'
+  | 'IDENTITY'
+  | 'CONTACT'
+  | 'SENSITIVE';
+
+export interface FieldCategoryMeta {
+  id: string;
+  label: string;
+  icon: string;
+  sensitivity: number;
+}
+
+export interface FieldDetail {
+  category: FieldCategoryId;
+  label: string;
+  type: string;
+}
+
+export interface TrackerInfo {
+  name: string;
+  category: string;
+  pattern?: RegExp;
+}
+
+export interface PageScanResult {
+  domain: string;
+  companyName: string;
+  pageType: string;
+  categories: FieldCategoryId[];
+  fieldDetails: FieldDetail[];
+  trackers: TrackerInfo[];
+  policyUrl: string | null;
+  hasHttps: boolean;
+  url: string;
+  title: string;
+}
+
+export interface PageRiskResult {
+  level: RiskLevel;
+  reasons: string[];
+  score: number;
+}
+
+// ─── Breach Types (from DataGuard HIBP integration) ──────────────────────────
+
+export interface HIBPBreach {
+  Name: string;
+  Domain: string;
+  BreachDate: string;
+  PwnCount?: number;
+  DataClasses?: string[];
+}
+
+// ─── Opt-Out Database Types (from DataGuard) ─────────────────────────────────
+
+export interface OptOutAlternative {
+  text: string;
+  url: string;
+}
+
+export interface OptOutDatabaseEntry {
+  domain: string;
+  data_usage: 'collected' | 'shared' | 'sold' | 'unknown';
+  opt_out_url: string;
+  method: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  estimated_time: string;
+  alternatives: (string | OptOutAlternative)[];
+  notes?: string;
+}
+
+// ─── Jurisdiction Types (Phase 1 Req 5) ──────────────────────────────────────
+
+export type JurisdictionId =
+  | 'GDPR'
+  | 'CCPA'
+  | 'CPRA'
+  | 'VCDPA'
+  | 'CPA'
+  | 'CTDPA';
+
+export interface PrivacyRight {
+  id: string;
+  law: JurisdictionId;
+  name: string;
+  description: string;
+  applicableTo: string; // e.g. "EU residents"
+}
+
+export interface JurisdictionInfo {
+  id: JurisdictionId;
+  name: string;
+  fullName: string;
+  region: string;
+  rights: PrivacyRight[];
+}
+
+// ─── Data Collection Category Colors (Req 2.4-2.5) ──────────────────────────
+
+export type DataCollectionCategory = 'grey' | 'blue' | 'yellow' | 'red';
+
+export interface DataCategoryGridItem {
+  category: string; // e.g. "Health", "Financial", "Location"
+  collectionStatus: DataCollectionCategory;
+  label: string;
 }
 
 // ─── Error Types ─────────────────────────────────────────────────────────────
@@ -154,6 +267,25 @@ export interface ApiKeyValidationResultMessage {
   payload: { success: boolean; error?: string };
 }
 
+// DataGuard-specific messages
+export interface GetPageDataMessage {
+  type: 'GET_PAGE_DATA';
+}
+
+export interface GetBreachDataMessage {
+  type: 'GET_BREACH_DATA';
+  domain: string;
+  categories: FieldCategoryId[];
+}
+
+export interface RefreshBreachCacheMessage {
+  type: 'REFRESH_BREACH_CACHE';
+}
+
+export interface GetCacheStatusMessage {
+  type: 'GET_CACHE_STATUS';
+}
+
 export type ExtensionMessage =
   | PolicyDetectedMessage
   | ShowAlertPopupMessage
@@ -161,4 +293,8 @@ export type ExtensionMessage =
   | AnalysisCompleteMessage
   | AnalysisErrorMessage
   | ValidateApiKeyMessage
-  | ApiKeyValidationResultMessage;
+  | ApiKeyValidationResultMessage
+  | GetPageDataMessage
+  | GetBreachDataMessage
+  | RefreshBreachCacheMessage
+  | GetCacheStatusMessage;
