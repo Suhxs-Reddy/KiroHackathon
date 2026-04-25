@@ -1,3 +1,4 @@
+no micheal push theres no bracnhes theres folders everyhting in my folder gone not relevant ervuynotng done here irrelavnt it should be the main stuff micheals folder on main has it
 # Team Context — PrivacyTool
 
 > Read this first before touching any code. This is the full picture of what we're building and who owns what.

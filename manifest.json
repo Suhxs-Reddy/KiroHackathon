@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Privacy Tool",
+  "version": "0.1.0",
+  "description": "Detects privacy policies and identifies data at risk using AI analysis of ToS/privacy policy text.",
+  "permissions": ["storage", "activeTab"],
+  "background": {
+    "service_worker": "dist/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/content_script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "public/popup.html",
+    "default_title": "Privacy Tool"
+  }
+}

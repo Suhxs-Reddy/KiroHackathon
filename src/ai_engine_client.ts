@@ -1,0 +1,383 @@
+import Ajv from 'ajv';
+import { Parsed_Policy, Risk_Analysis, RiskLevel, AnalysisError, LLMAdapter } from './types.js';
+
+// ─── JSON Schema for Risk_Analysis Validation ────────────────────────────────
+
+const riskAnalysisSchema = {
+  type: 'object',
+  required: ['dataTypes', 'analysisWarnings'],
+  properties: {
+    dataTypes: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: [
+          'dataType',
+          'riskLevel',
+          'purposes',
+          'sharedWithThirdParties',
+          'thirdPartyCategories',
+          'warningNote',
+          'deviationNote',
+        ],
+        properties: {
+          dataType: { type: 'string', minLength: 1 },
+          riskLevel: { type: 'string', enum: ['low', 'medium', 'high'] },
+          purposes: { type: 'array', items: { type: 'string' } },
+          sharedWithThirdParties: { type: 'boolean' },
+          thirdPartyCategories: { type: 'array', items: { type: 'string' } },
+          warningNote: { type: ['string', 'null'] },
+          deviationNote: { type: ['string', 'null'] },
+        },
+      },
+    },
+    analysisWarnings: { type: 'array', items: { type: 'string' } },
+  },
+};
+
+const ajv = new Ajv();
+const validateRiskAnalysis = ajv.compile(riskAnalysisSchema);
+
+// ─── Task 6.1 & 6.2: LLM Adapters ─────────────────────────────────────────────
+
+export class SaulLMAdapter implements LLMAdapter {
+  modelId = 'Equall/Saul-Instruct-v1';
+
+  constructor(private apiKey: string) {}
+
+  async complete(systemPrompt: string, userMessage: string): Promise<string> {
+    const response = await fetch('https://api-inference.huggingface.co/models/Equall/Saul-Instruct-v1', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        inputs: `${systemPrompt}\n\n${userMessage}`,
+        parameters: {
+          max_new_tokens: 2000,
+          temperature: 0.3,
+          return_full_text: false,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      if (response.status >= 500) {
+        throw new AnalysisError(
+          'AI_UNAVAILABLE',
+          'The AI service is unavailable. Check your API key and network, then retry.',
+          true,
+          false,
+          `HTTP ${response.status} from HuggingFace`
+        );
+      }
+      throw new AnalysisError(
+        'API_KEY_INVALID',
+        'API key validation failed.',
+        false,
+        false,
+        `HTTP ${response.status}`
+      );
+    }
+
+    const result = await response.json();
+    
+    // HuggingFace returns array of results
+    if (Array.isArray(result) && result[0]?.generated_text) {
+      return result[0].generated_text;
+    }
+    
+    throw new AnalysisError(
+      'AI_INVALID_RESPONSE',
+      'Analysis returned unexpected data. Please retry.',
+      true,
+      false,
+      'Unexpected response format from HuggingFace'
+    );
+  }
+}
+
+export class OpenAIAdapter implements LLMAdapter {
+  modelId = 'gpt-4o';
+
+  constructor(private apiKey: string) {}
+
+  async complete(systemPrompt: string, userMessage: string): Promise<string> {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
+      }),
+    });
+
+    if (!response.ok) {
+      if (response.status >= 500) {
+        throw new AnalysisError(
+          'AI_UNAVAILABLE',
+          'The AI service is unavailable. Check your API key and network, then retry.',
+          true,
+          false,
+          `HTTP ${response.status} from OpenAI`
+        );
+      }
+      throw new AnalysisError(
+        'API_KEY_INVALID',
+        'API key validation failed.',
+        false,
+        false,
+        `HTTP ${response.status}`
+      );
+    }
+
+    const result = await response.json();
+    return result.choices[0].message.content;
+  }
+}
+
+// ─── Task 6.3: Prompt Construction ────────────────────────────────────────────
+
+function buildSystemPrompt(): string {
+  return `You are a privacy policy analyst. Your job is to read the full text of a privacy policy or Terms of Service document and extract structured information about personal data collection and risk.
+
+You MUST respond with a single valid JSON object that conforms exactly to this schema:
+
+{
+  "dataTypes": [
+    {
+      "dataType": "<string: category of personal data, e.g. 'location data'>",
+      "riskLevel": "<'low' | 'medium' | 'high'>",
+      "purposes": ["<string: stated purpose from policy text>"],
+      "sharedWithThirdParties": <boolean>,
+      "thirdPartyCategories": ["<string: category of third party, e.g. 'advertising networks'>"],
+      "warningNote": "<string or null: flag if language is ambiguous or vague>",
+      "deviationNote": "<string or null: flag if data access is unusually broad>"
+    }
+  ],
+  "analysisWarnings": ["<string: top-level issues, e.g. policy text was truncated>"]
+}
+
+Risk level assignment rules:
+- HIGH: biometric data, precise location, health/medical data, financial account data, government ID numbers, data sold to third parties, data used for profiling
+- MEDIUM: browsing history, device identifiers, IP address, email address, inferred interests, data shared with advertising partners
+- LOW: anonymized/aggregated data, technical logs not linked to identity, data used solely for service operation with no third-party sharing
+
+Ambiguity rules (set warningNote):
+- Set warningNote when the policy uses vague phrases like "may share", "partners", "affiliates", "service providers" without specifying who or for what purpose
+- Set warningNote when opt-out language is present but the mechanism is not described
+
+Deviation rules (set deviationNote):
+- Set deviationNote when the policy claims rights to sell, license, or transfer data beyond what is needed to operate the service
+- Set deviationNote when data retention is indefinite or unusually long (> 5 years)
+- Set deviationNote when the policy grants rights to combine data across unrelated services
+
+Extract ALL distinct data types mentioned. Do not summarize multiple data types into one unless they are genuinely the same category. If no personal data collection is mentioned, return an empty dataTypes array.
+
+All text in your response MUST be in plain language at or below an 8th-grade reading level. Do not use legal jargon in purposes, warningNote, or deviationNote fields.`;
+}
+
+function buildUserMessage(parsed: Parsed_Policy, targetDomain: string): string {
+  return `Analyze the following privacy policy text and extract structured risk information.
+The policy is from: ${targetDomain}
+Policy URL: ${parsed.sourceUrl}
+
+--- POLICY TEXT START ---
+${parsed.fullText}
+--- POLICY TEXT END ---`;
+}
+
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+function truncateText(text: string, maxTokens: number): { text: string; wasTruncated: boolean } {
+  const estimatedTokens = estimateTokens(text);
+  if (estimatedTokens <= maxTokens) {
+    return { text, wasTruncated: false };
+  }
+
+  const maxChars = maxTokens * 4;
+  return {
+    text: text.substring(0, maxChars) + '\n[TRUNCATED — policy text exceeded context limit]',
+    wasTruncated: true,
+  };
+}
+
+// ─── Task 6.4: JSON Validation and Risk_Analysis Assembly ─────────────────────
+
+function computeOverallRiskLevel(dataTypes: Risk_Analysis['dataTypes']): RiskLevel {
+  if (dataTypes.length === 0) return 'low';
+
+  const riskLevels: RiskLevel[] = ['low', 'medium', 'high'];
+  let maxLevel: RiskLevel = 'low';
+
+  for (const entry of dataTypes) {
+    if (riskLevels.indexOf(entry.riskLevel) > riskLevels.indexOf(maxLevel)) {
+      maxLevel = entry.riskLevel;
+    }
+  }
+
+  return maxLevel;
+}
+
+async function parseAndValidateResponse(
+  responseText: string,
+  adapter: LLMAdapter,
+  systemPrompt: string,
+  userMessage: string,
+  retryCount: number = 0
+): Promise<{ dataTypes: Risk_Analysis['dataTypes']; analysisWarnings: string[] }> {
+  try {
+    const parsed = JSON.parse(responseText);
+
+    if (validateRiskAnalysis(parsed)) {
+      return parsed;
+    }
+
+    // Schema validation failed
+    if (retryCount === 0) {
+      // Retry once with correction prompt
+      const correctionPrompt = `${userMessage}\n\nYour previous response was not valid JSON matching the required schema. Please respond with only the JSON object.`;
+      const retryResponse = await adapter.complete(systemPrompt, correctionPrompt);
+      return parseAndValidateResponse(retryResponse, adapter, systemPrompt, userMessage, 1);
+    }
+
+    throw new AnalysisError(
+      'AI_INVALID_RESPONSE',
+      'Analysis returned unexpected data. Please retry.',
+      true,
+      false,
+      `Schema validation failed: ${JSON.stringify(validateRiskAnalysis.errors)}`
+    );
+  } catch (error) {
+    if (error instanceof AnalysisError) throw error;
+
+    // JSON parse error
+    if (retryCount === 0) {
+      const correctionPrompt = `${userMessage}\n\nYour previous response was not valid JSON. Please respond with only the JSON object.`;
+      const retryResponse = await adapter.complete(systemPrompt, correctionPrompt);
+      return parseAndValidateResponse(retryResponse, adapter, systemPrompt, userMessage, 1);
+    }
+
+    throw new AnalysisError(
+      'AI_INVALID_RESPONSE',
+      'Analysis returned unexpected data. Please retry.',
+      true,
+      false,
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+}
+
+// ─── Task 6.8: Public API ──────────────────────────────────────────────────────
+
+export async function analyzePolicy(parsed: Parsed_Policy): Promise<Risk_Analysis> {
+  // Load API key from storage
+  const storage = await chrome.storage.local.get(['apiKey', 'adapterType']);
+  
+  if (!storage.apiKey) {
+    throw new AnalysisError(
+      'NO_API_KEY',
+      'Please configure your AI API key in Settings before running analysis.',
+      false,
+      false
+    );
+  }
+
+  // Instantiate adapter
+  const adapterType = storage.adapterType || 'saulm';
+  const adapter: LLMAdapter = adapterType === 'openai'
+    ? new OpenAIAdapter(storage.apiKey)
+    : new SaulLMAdapter(storage.apiKey);
+
+  // Build prompts
+  const systemPrompt = buildSystemPrompt();
+  
+  // Apply token budget (28k for SaulLM, 100k for OpenAI)
+  const maxTokens = adapterType === 'openai' ? 100000 : 28000;
+  const { text: fullText, wasTruncated } = truncateText(parsed.fullText, maxTokens);
+  
+  const targetDomain = new URL(parsed.sourceUrl).hostname;
+  const userMessage = buildUserMessage({ ...parsed, fullText }, targetDomain);
+
+  // Call AI
+  const responseText = await adapter.complete(systemPrompt, userMessage);
+
+  // Validate and parse
+  const { dataTypes, analysisWarnings } = await parseAndValidateResponse(
+    responseText,
+    adapter,
+    systemPrompt,
+    userMessage
+  );
+
+  // Add truncation warning if needed
+  if (wasTruncated) {
+    analysisWarnings.push('Policy text was truncated due to length');
+  }
+
+  // Assemble final Risk_Analysis
+  const overallRiskLevel = computeOverallRiskLevel(dataTypes);
+
+  return {
+    schemaVersion: '1.0',
+    policyUrl: parsed.sourceUrl,
+    targetDomain,
+    analyzedAt: new Date().toISOString(),
+    overallRiskLevel,
+    dataTypes,
+    analysisWarnings,
+    modelUsed: adapter.modelId,
+  };
+}
+
+// ─── Task 8.2: API Key Testing ────────────────────────────────────────────────
+
+export async function testApiKey(apiKey: string, adapterType: 'saulm' | 'openai'): Promise<void> {
+  const adapter: LLMAdapter = adapterType === 'openai'
+    ? new OpenAIAdapter(apiKey)
+    : new SaulLMAdapter(apiKey);
+
+  const testPrompt = 'You are a test. Respond with: {"dataTypes":[], "analysisWarnings":[]}';
+  const testMessage = 'Test';
+
+  try {
+    console.log('[testApiKey] Starting validation with', adapterType);
+    
+    // Add 60 second timeout
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Validation timeout after 60 seconds')), 60000);
+    });
+    
+    const response = await Promise.race([
+      adapter.complete(testPrompt, testMessage),
+      timeoutPromise
+    ]);
+    
+    console.log('[testApiKey] Got response:', response.substring(0, 100));
+    JSON.parse(response); // Verify it's valid JSON
+    console.log('[testApiKey] Validation successful');
+  } catch (error) {
+    console.error('[testApiKey] Validation failed:', error);
+    if (error instanceof AnalysisError && error.code === 'API_KEY_INVALID') {
+      throw error;
+    }
+    throw new AnalysisError(
+      'API_KEY_INVALID',
+      'API key validation failed.',
+      false,
+      false,
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+}

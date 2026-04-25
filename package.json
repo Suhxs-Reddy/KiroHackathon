@@ -1,0 +1,27 @@
+{
+  "name": "privacy-tool",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "test": "vitest --run",
+    "smoke": "npx tsx tests/smoke/e2e_smoke.ts"
+  },
+  "dependencies": {
+    "@mozilla/readability": "0.5.0",
+    "ajv": "8.17.1",
+    "pdfjs-dist": "4.4.168"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.0.268",
+    "@types/node": "20.14.0",
+    "fast-check": "3.21.0",
+    "jsdom": "24.1.0",
+    "tsx": "4.16.2",
+    "typescript": "5.5.3",
+    "vite": "5.3.4",
+    "vitest": "2.0.4"
+  }
+}
