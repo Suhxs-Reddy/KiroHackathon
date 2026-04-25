@@ -882,10 +882,39 @@ async function init() {
   renderRiskBadge(level)
   const optOutEntry = findOptOut(pageData.domain)
   const dataUsage = optOutEntry ? (optOutEntry.data_usage || 'unknown') : 'unknown'
-  renderCategories(pageData.categories, pageData.fieldDetails || [], dataUsage)
-  renderReasons(reasons)
-  renderBreaches(domainBreaches, categoryBreaches)
-  renderOptOut(pageData.domain)
+
+  // Only show "What this site collects" if fields were detected
+  if (pageData.categories.length > 0) {
+    renderCategories(pageData.categories, pageData.fieldDetails || [], dataUsage)
+  } else {
+    el('section-collects').classList.add('hidden')
+  }
+
+  // Only show "Why we flagged it" if there are meaningful reasons (not just "no fields detected")
+  const meaningfulReasons = reasons.filter(r => !r.includes('No data input fields'))
+  if (meaningfulReasons.length > 0) {
+    renderReasons(meaningfulReasons)
+  } else {
+    el('section-reasons').classList.add('hidden')
+  }
+
+  // Show breach history only if breaches were found, otherwise show "coming soon" style
+  if (domainBreaches.length > 0 || categoryBreaches.length > 0) {
+    renderBreaches(domainBreaches, categoryBreaches)
+  } else {
+    el('section-breaches').querySelector('.breach-tabs').classList.add('hidden')
+    el('domain-breach-list').innerHTML = `
+      <div style="text-align: center; padding: 12px 0;">
+        <div style="font-size: 20px; margin-bottom: 6px;">🛡️</div>
+        <p class="no-breach-msg" style="font-weight: 500;">No breaches found</p>
+        <p class="no-breach-caveat">We check the Have I Been Pwned database. No record doesn't guarantee safety.</p>
+      </div>
+    `
+  }
+
+  // Hide the static opt-out section — AI analysis provides better opt-out guidance
+  el('section-optout').classList.add('hidden')
+
   renderScanTime()
   initBookmarkBtn(pageData.domain)
   initPolicyAnalysis(pageData.domain, pageData.policyUrl)
