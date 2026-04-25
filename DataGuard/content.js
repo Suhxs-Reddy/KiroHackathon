@@ -237,3 +237,160 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
   return true // keep channel open for async
 })
+
+
+// ─── Auto-detect "agree to terms" checkboxes and inject risk badge ────────────
+
+const AGREE_PATTERNS = [
+  /agree\s*(to|with)\s*(the|our)?\s*(terms|privacy|policy|tos)/i,
+  /by\s*(creating|signing|registering|continuing)/i,
+  /i\s*(accept|agree|consent)/i,
+  /you\s*agree\s*to/i,
+]
+
+function findTermsAgreementElements() {
+  const results = []
+
+  // Check labels, paragraphs, spans near checkboxes
+  const candidates = document.querySelectorAll('label, p, span, div')
+  for (const el of candidates) {
+    const text = (el.textContent || '').trim()
+    if (text.length < 10 || text.length > 500) continue
+
+    const matches = AGREE_PATTERNS.some(p => p.test(text))
+    if (!matches) continue
+
+    // Find policy links within this element
+    const links = el.querySelectorAll('a[href]')
+    const policyLinks = []
+    for (const link of links) {
+      const linkText = (link.textContent || '').toLowerCase()
+      const href = link.getAttribute('href') || ''
+      if (/privacy|terms|policy|tos|data/i.test(linkText + ' ' + href)) {
+        try {
+          policyLinks.push({
+            url: new URL(href, window.location.href).href,
+            text: link.textContent.trim(),
+          })
+        } catch (_) {}
+      }
+    }
+
+    if (policyLinks.length > 0) {
+      results.push({ element: el, policyLinks })
+    }
+  }
+
+  return results
+}
+
+function injectRiskBadge(element, policyLinks) {
+  // Don't inject twice
+  if (element.querySelector('.dataguard-inline-badge')) return
+
+  // Create the badge
+  const badge = document.createElement('div')
+  badge.className = 'dataguard-inline-badge'
+  badge.style.cssText = `
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 6px 12px;
+    background: #EFF6FF;
+    border: 1px solid #93C5FD;
+    border-radius: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 12px;
+    color: #1D4ED8;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  `
+
+  // Shield icon SVG
+  const shieldSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`
+
+  badge.innerHTML = `${shieldSvg} <span class="dataguard-badge-text">Scanning terms...</span>`
+
+  // Hover effect
+  badge.addEventListener('mouseenter', () => {
+    badge.style.transform = 'translateY(-1px)'
+    badge.style.boxShadow = '0 3px 8px rgba(37, 99, 235, 0.2)'
+  })
+  badge.addEventListener('mouseleave', () => {
+    badge.style.transform = 'translateY(0)'
+    badge.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)'
+  })
+
+  // Insert after the agreement text
+  element.appendChild(badge)
+
+  // Start analysis — pick the first privacy/terms link
+  const targetUrl = policyLinks[0].url
+  chrome.runtime.sendMessage(
+    { type: 'INITIATE_ANALYSIS', payload: { policyUrl: targetUrl } },
+    (response) => {
+      const textEl = badge.querySelector('.dataguard-badge-text')
+      if (!textEl) return
+
+      if (response && response.success && response.analysis) {
+        const risk = response.analysis.overallRiskLevel
+        const count = response.analysis.dataTypes ? response.analysis.dataTypes.length : 0
+
+        const colors = {
+          high: { bg: '#FEF2F2', border: '#FCA5A5', text: '#DC2626' },
+          medium: { bg: '#FFFBEB', border: '#FDE68A', text: '#D97706' },
+          low: { bg: '#ECFDF5', border: '#A7F3D0', text: '#059669' },
+        }
+        const c = colors[risk] || colors.medium
+
+        badge.style.background = c.bg
+        badge.style.borderColor = c.border
+        badge.style.color = c.text
+
+        const riskLabel = risk.toUpperCase()
+        textEl.textContent = `${riskLabel} RISK · ${count} data types collected — Click for details`
+
+        // Click opens the extension popup
+        badge.addEventListener('click', () => {
+          // Store the analysis so the popup can show it
+          chrome.storage.local.set({
+            [`policy_analysis_${window.location.hostname.replace(/^www\./, '')}`]: response.analysis
+          })
+          // Can't programmatically open popup, but we can show a notification
+          chrome.runtime.sendMessage({ type: 'OPEN_TAB', payload: { url: 'chrome-extension://' + chrome.runtime.id + '/DataGuard/popup.html' } })
+        })
+      } else {
+        textEl.textContent = 'Could not analyze terms'
+        badge.style.background = '#F9FAFB'
+        badge.style.borderColor = '#E5E7EB'
+        badge.style.color = '#6B7280'
+      }
+    }
+  )
+}
+
+// Run detection after page loads
+function detectAndInjectBadges() {
+  const agreements = findTermsAgreementElements()
+  for (const { element, policyLinks } of agreements) {
+    injectRiskBadge(element, policyLinks)
+  }
+}
+
+// Run on page load and observe for dynamic content (SPAs)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', detectAndInjectBadges)
+} else {
+  detectAndInjectBadges()
+}
+
+// Also observe for dynamically added content (React, Vue, etc.)
+const observer = new MutationObserver(() => {
+  detectAndInjectBadges()
+})
+observer.observe(document.body || document.documentElement, {
+  childList: true,
+  subtree: true,
+})
