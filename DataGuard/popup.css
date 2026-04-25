@@ -130,7 +130,6 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
   color: var(--text-secondary);
 }
 
-.error-icon { font-size: 28px; }
 .error-hint { font-size: 12px; color: var(--text-muted); }
 
 /* ─── Header ───────────────────────────────────────────────────────────────── */
@@ -829,15 +828,6 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
   }
 }
 
-.settings-link {
-  font-size: 12px;
-  color: var(--text-muted);
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.settings-link:hover { color: var(--text-secondary); }
-
 /* ─── AI Policy Analysis section ───────────────────────────────────────────── */
 
 @keyframes pulseDot {
@@ -1072,4 +1062,95 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
   margin-top: 6px;
   font-size: 10px;
   color: var(--text-muted);
+}
+
+/* ─── Summary toggle (collapsible Key Takeaways) ──────────────────────────── */
+
+.summary-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: inherit;
+  padding: 0;
+  width: 100%;
+  text-align: left;
+}
+
+.summary-toggle svg {
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.summary-toggle[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
+.summary-list {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  list-style: disc;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  max-height: 500px;
+  opacity: 1;
+}
+
+.summary-list.collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin: 0;
+}
+
+/* ─── SVG icons in section titles ──────────────────────────────────────────── */
+
+.section-icon svg {
+  display: block;
+}
+
+/* ─── Status dots (replace emoji indicators) ───────────────────────────────── */
+
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.status-dot.available   { background: var(--risk-low); }
+.status-dot.unavailable { background: var(--risk-high); }
+.status-dot.warning     { background: var(--risk-med); }
+
+/* ─── Settings link SVG alignment ──────────────────────────────────────────── */
+
+.settings-link {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.settings-link svg {
+  display: block;
+}
+
+.settings-link:hover { color: var(--text-secondary); }
+
+/* ─── Error icon SVG ───────────────────────────────────────────────────────── */
+
+.error-icon {
+  color: var(--risk-med);
+}
+
+.error-icon svg {
+  display: block;
 }

@@ -16,7 +16,7 @@
 
     <!-- Error state -->
     <div id="error-screen" class="error-screen hidden">
-      <span class="error-icon">⚠️</span>
+      <span class="error-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
       <p id="error-message">Unable to scan this page.</p>
       <p class="error-hint">DataGuard can't run on browser internal pages (chrome://, about:, etc.).</p>
     </div>
@@ -42,11 +42,11 @@
       <!-- ── Section 1: What this site collects ── -->
       <section class="section" id="section-collects">
         <h2 class="section-title">
-          <span class="section-icon">📋</span>
+          <span class="section-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></span>
           What this site collects
         </h2>
         <div id="no-fields" class="no-fields hidden">
-          <span class="check-icon">✓</span>
+          <span class="check-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
           No data input fields detected on this page.
         </div>
         <div id="category-pills" class="category-pills"></div>
@@ -55,7 +55,7 @@
       <!-- ── Section 2: Why we flagged it ── -->
       <section class="section" id="section-reasons">
         <h2 class="section-title">
-          <span class="section-icon">⚠️</span>
+          <span class="section-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
           Why we flagged it
         </h2>
         <ul id="reason-list" class="reason-list"></ul>
@@ -64,7 +64,7 @@
       <!-- ── Section 2.5: AI Policy Analysis ── -->
       <section class="section" id="section-policy-analysis">
         <h2 class="section-title">
-          <span class="section-icon">🔍</span>
+          <span class="section-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="11" r="3"/><line x1="12" y1="8" x2="12" y2="8.01"/></svg></span>
           AI Policy Analysis
         </h2>
         <div id="policy-analysis-loading" class="hidden">
@@ -73,14 +73,14 @@
         </div>
         <div id="policy-analysis-content"></div>
         <button id="analyze-policy-btn" class="optout-btn" style="margin-top: 8px;">
-          🔍 Analyze Privacy Policy
+          Analyze Privacy Policy
         </button>
       </section>
 
       <!-- ── Section 3: Breach history ── -->
       <section class="section" id="section-breaches">
         <h2 class="section-title">
-          <span class="section-icon">🔓</span>
+          <span class="section-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg></span>
           Breach history
         </h2>
         <div class="breach-tabs">
@@ -98,7 +98,7 @@
       <!-- ── Section 4: Opt-out ── -->
       <section class="section" id="section-optout">
         <h2 class="section-title">
-          <span class="section-icon">🚪</span>
+          <span class="section-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
           How to opt out
         </h2>
         <div id="optout-content"></div>
@@ -110,13 +110,13 @@
         <div class="footer-actions">
           <div class="bookmark-wrapper">
             <button id="bookmark-btn" class="bookmark-btn">
-              🔖 Bookmark
+              Bookmark
             </button>
             <div class="bookmark-tooltip">
               Save this site to your watch list. DataGuard will notify you if a new data breach is detected here.
             </div>
           </div>
-          <a href="#" id="settings-link" class="settings-link" title="Settings">⚙️ Settings</a>
+          <a href="#" id="settings-link" class="settings-link" title="Settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Settings</a>
         </div>
       </footer>
 

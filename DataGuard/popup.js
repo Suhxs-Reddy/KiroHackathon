@@ -8,22 +8,22 @@
 // ─── Category metadata ────────────────────────────────────────────────────────
 
 const CATEGORY_META = {
-  FINANCIAL:     { label: 'Financial',      icon: '💳', cssClass: 'financial',
+  FINANCIAL:     { label: 'Financial',      icon: '', cssClass: 'financial',
     description: 'This site collects financial information such as credit/debit card numbers, CVV codes, or billing details. This is among the most sensitive data you can share online.',
     usedFor: 'Used for payment processing. Exposed in breaches, this data enables fraud and identity theft.' },
-  GOVERNMENT_ID: { label: 'Government ID',  icon: '🪪', cssClass: 'government_id',
+  GOVERNMENT_ID: { label: 'Government ID',  icon: '', cssClass: 'government_id',
     description: 'This site collects government-issued identification such as Social Security Numbers, passport numbers, or driver\'s license numbers.',
     usedFor: 'Used for identity verification. Extremely sensitive — exposure enables identity theft.' },
-  AUTH:          { label: 'Authentication', icon: '🔐', cssClass: 'auth',
+  AUTH:          { label: 'Authentication', icon: '', cssClass: 'auth',
     description: 'This site collects authentication credentials such as passwords, PINs, or security question answers.',
     usedFor: 'Used to verify your identity. Exposed passwords can compromise all accounts where you reuse them.' },
-  IDENTITY:      { label: 'Identity',       icon: '👤', cssClass: 'identity',
+  IDENTITY:      { label: 'Identity',       icon: '', cssClass: 'identity',
     description: 'This site collects personal identity information such as your full name, date of birth, or home address.',
     usedFor: 'Used for account creation and verification. Can be combined with other data for identity theft.' },
-  CONTACT:       { label: 'Contact',        icon: '📬', cssClass: 'contact',
+  CONTACT:       { label: 'Contact',        icon: '', cssClass: 'contact',
     description: 'This site collects contact information such as your email address or phone number.',
     usedFor: 'Used for communication and account recovery. Often sold to data brokers or used for spam.' },
-  SENSITIVE:     { label: 'Sensitive',      icon: '⚕️', cssClass: 'sensitive',
+  SENSITIVE:     { label: 'Sensitive',      icon: '', cssClass: 'sensitive',
     description: 'This site collects sensitive personal data such as health information, biometric data, or demographic details.',
     usedFor: 'Highly sensitive — can affect insurance, employment, and personal safety if exposed.' },
 }
@@ -31,9 +31,9 @@ const CATEGORY_META = {
 // ─── Risk metadata ────────────────────────────────────────────────────────────
 
 const RISK_META = {
-  high:   { label: 'HIGH RISK',   icon: '🔴', cssClass: 'high' },
-  medium: { label: 'MEDIUM RISK', icon: '🟡', cssClass: 'medium' },
-  low:    { label: 'LOW RISK',    icon: '🟢', cssClass: 'low' },
+  high:   { label: 'HIGH RISK',   icon: '', cssClass: 'high' },
+  medium: { label: 'MEDIUM RISK', icon: '', cssClass: 'medium' },
+  low:    { label: 'LOW RISK',    icon: '', cssClass: 'low' },
 }
 
 // ─── Risk scorer (inline — avoids ES module issues in MV3 popup) ──────────────
@@ -63,7 +63,7 @@ function computeRisk({ categories, breaches, hasHttps, policyUrl }) {
 
   if (!hasHttps) {
     score += 30
-    reasons.push('⚠️ This page does not use HTTPS — data is transmitted unencrypted.')
+    reasons.push('This page does not use HTTPS — data is transmitted unencrypted.')
   }
 
   if (!policyUrl) {
@@ -154,17 +154,17 @@ function renderRiskBadge(level) {
   const meta = RISK_META[level] || RISK_META.low
   const badge = el('risk-badge')
   badge.className = `risk-badge ${meta.cssClass}`
-  el('risk-icon').textContent = meta.icon
+  el('risk-icon').innerHTML = `<span class="status-dot ${meta.cssClass === 'high' ? 'unavailable' : meta.cssClass === 'medium' ? 'warning' : 'available'}" style="width:8px;height:8px;"></span>`
   el('risk-label').textContent = meta.label
 }
 
 // ─── Data usage color system ──────────────────────────────────────────────────
 
 const DATA_USAGE_META = {
-  collected: { label: 'Collected',  cssClass: 'usage-collected', dot: '🔵' },
-  shared:    { label: 'Shared',     cssClass: 'usage-shared',    dot: '🟡' },
-  sold:      { label: 'Sold',       cssClass: 'usage-sold',      dot: '🔴' },
-  unknown:   { label: 'Unknown',    cssClass: 'usage-unknown',   dot: '⚪' },
+  collected: { label: 'Collected',  cssClass: 'usage-collected', dot: '<span class="status-dot available"></span>' },
+  shared:    { label: 'Shared',     cssClass: 'usage-shared',    dot: '<span class="status-dot warning"></span>' },
+  sold:      { label: 'Sold',       cssClass: 'usage-sold',      dot: '<span class="status-dot unavailable"></span>' },
+  unknown:   { label: 'Unknown',    cssClass: 'usage-unknown',   dot: '<span class="status-dot" style="background:var(--text-muted)"></span>' },
 }
 
 function renderCategories(categories, fieldDetails, dataUsage) {
@@ -183,9 +183,9 @@ function renderCategories(categories, fieldDetails, dataUsage) {
   legend.className = 'usage-legend'
   legend.innerHTML = `
     <span class="legend-title">Data usage on this site:</span>
-    <span class="legend-item usage-collected">🔵 Collected</span>
-    <span class="legend-item usage-shared">🟡 Shared</span>
-    <span class="legend-item usage-sold">🔴 Sold</span>
+    <span class="legend-item usage-collected"><span class="status-dot available"></span> Collected</span>
+    <span class="legend-item usage-shared"><span class="status-dot warning"></span> Shared</span>
+    <span class="legend-item usage-sold"><span class="status-dot unavailable"></span> Sold</span>
   `
   pillsContainer.appendChild(legend)
 
@@ -203,7 +203,7 @@ function renderCategories(categories, fieldDetails, dataUsage) {
     // Pill label — colored by data_usage
     const pill = document.createElement('div')
     pill.className = `pill ${usageMeta.cssClass}-pill`
-    pill.innerHTML = `<span>${meta.icon}</span><span>${meta.label}</span>`
+    pill.innerHTML = `<span>${meta.label}</span>`
     pillsContainer.appendChild(pill)
 
     // Always-visible detail card
@@ -261,7 +261,7 @@ function renderBreaches(domainBreaches, categoryBreaches) {
   domainList.innerHTML = ''
   if (domainBreaches.length === 0) {
     domainList.innerHTML = `
-      <p class="no-breach-msg">✓ No known breaches in our database</p>
+      <p class="no-breach-msg">No known breaches in our database</p>
       <p class="no-breach-caveat">Absence of a record doesn't guarantee this site has never been breached.</p>
     `
   } else {
@@ -295,7 +295,7 @@ function renderOptOut(domain) {
 
   if (entry) {
     const difficultyClass = entry.difficulty || 'medium'
-    const difficultyLabel = { easy: '⚡ Easy', medium: '⏱ Medium', hard: '🔧 Hard' }[difficultyClass] || difficultyClass
+    const difficultyLabel = { easy: 'Easy', medium: 'Medium', hard: 'Hard' }[difficultyClass] || difficultyClass
 
     const altItems = (entry.alternatives || []).map(a => {
       // Support both old string format and new {text, url} format
@@ -310,7 +310,7 @@ function renderOptOut(domain) {
         </a>
         <div class="optout-meta">
           <span class="difficulty-badge ${difficultyClass}">${difficultyLabel}</span>
-          <span class="optout-time">⏰ ${entry.estimated_time}</span>
+          <span class="optout-time">${entry.estimated_time}</span>
         </div>
         ${entry.notes ? `<p class="optout-notes">${entry.notes}</p>` : ''}
         ${altItems ? `
@@ -396,7 +396,7 @@ async function initBookmarkBtn(domain) {
 
     // Brief confirmation flash
     const prev = btn.textContent
-    btn.textContent = nowBookmarked ? '✓ Removed' : '✓ Bookmarked!'
+    btn.textContent = nowBookmarked ? 'Removed' : 'Bookmarked'
     btn.disabled = true
     setTimeout(() => {
       updateBookmarkBtn(btn, !nowBookmarked)
@@ -407,10 +407,10 @@ async function initBookmarkBtn(domain) {
 
 function updateBookmarkBtn(btn, isBookmarked) {
   if (isBookmarked) {
-    btn.textContent = '🔖 Bookmarked'
+    btn.textContent = 'Bookmarked'
     btn.classList.add('bookmarked')
   } else {
-    btn.textContent = '🔖 Bookmark'
+    btn.textContent = 'Bookmark'
     btn.classList.remove('bookmarked')
   }
 }
@@ -506,16 +506,27 @@ function renderPolicyAnalysis(analysis) {
   const btn = el('analyze-policy-btn')
   if (btn) btn.classList.add('hidden')
 
-  // Key Takeaways
+  // Key Takeaways (collapsible)
   if (analysis.policySummary && analysis.policySummary.length > 0) {
     const summaryBox = document.createElement('div')
     summaryBox.className = 'policy-summary'
     summaryBox.innerHTML = `
-      <div class="policy-summary-title">📋 Key Takeaways</div>
-      <ul>
+      <button class="summary-toggle" aria-expanded="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+        Key Takeaways
+      </button>
+      <ul class="summary-list">
         ${analysis.policySummary.map(point => `<li>${escapeHtml(point)}</li>`).join('')}
       </ul>
     `
+    // Wire up collapsible toggle
+    const toggleBtn = summaryBox.querySelector('.summary-toggle')
+    const summaryList = summaryBox.querySelector('.summary-list')
+    toggleBtn.addEventListener('click', () => {
+      const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true'
+      toggleBtn.setAttribute('aria-expanded', String(!isExpanded))
+      summaryList.classList.toggle('collapsed', isExpanded)
+    })
     container.appendChild(summaryBox)
   }
 
@@ -543,21 +554,21 @@ function renderPolicyAnalysis(analysis) {
         const cats = dt.thirdPartyCategories && dt.thirdPartyCategories.length > 0
           ? ` (${escapeHtml(dt.thirdPartyCategories.join(', '))})`
           : ''
-        html += `<div class="data-type-third-party">⚠ Shared with third parties${cats}</div>`
+        html += `<div class="data-type-third-party"><span class="status-dot warning"></span> Shared with third parties${cats}</div>`
       }
 
       // Warning note
       if (dt.warningNote) {
-        html += `<div class="data-type-warning">⚠ ${escapeHtml(dt.warningNote)}</div>`
+        html += `<div class="data-type-warning"><span class="status-dot warning"></span> ${escapeHtml(dt.warningNote)}</div>`
       }
 
       // Opt-out indicator
       const guidance = dt.optOutGuidance
       if (guidance) {
         const statusLabels = {
-          available: '✅ Opt-out available',
-          vague: '⚠️ Vague opt-out language',
-          unavailable: '❌ No opt-out found',
+          available: '<span class="status-dot available"></span> Opt-out available',
+          vague: '<span class="status-dot warning"></span> Vague opt-out language',
+          unavailable: '<span class="status-dot unavailable"></span> No opt-out found',
         }
         const statusClass = guidance.status || 'unavailable'
         html += `<div class="optout-indicator ${statusClass}">${statusLabels[statusClass] || statusLabels.unavailable}</div>`
@@ -567,16 +578,16 @@ function renderPolicyAnalysis(analysis) {
           html += '<div class="data-type-actions">'
           for (const mech of guidance.mechanisms) {
             if (mech.type === 'settings_url' || mech.type === 'web_form') {
-              html += `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">🔗 ${escapeHtml(mech.value)}</div>`
-              html += `<button class="action-btn primary" data-action="open-url" data-url="${escapeAttr(mech.value)}">🔗 Opt Out</button>`
+              html += `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">${escapeHtml(mech.value)}</div>`
+              html += `<button class="action-btn primary" data-action="open-url" data-url="${escapeAttr(mech.value)}">Opt Out</button>`
             } else if (mech.type === 'email') {
-              html += `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">✉️ ${escapeHtml(mech.value)}</div>`
-              html += `<button class="action-btn primary" data-action="send-email" data-email="${escapeAttr(mech.value)}" data-domain="${escapeAttr(analysis.targetDomain)}" data-datatype="${escapeAttr(dt.dataType)}">✉️ Send Email</button>`
+              html += `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">Email: ${escapeHtml(mech.value)}</div>`
+              html += `<button class="action-btn primary" data-action="send-email" data-email="${escapeAttr(mech.value)}" data-domain="${escapeAttr(analysis.targetDomain)}" data-datatype="${escapeAttr(dt.dataType)}">Send Email</button>`
             } else if (mech.type === 'postal_mail') {
-              html += `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">📬 ${escapeHtml(mech.value)}</div>`
-              html += `<button class="action-btn" data-action="add-calendar" data-domain="${escapeAttr(analysis.targetDomain)}" data-datatype="${escapeAttr(dt.dataType)}">📅 Add to Calendar</button>`
+              html += `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">Mail: ${escapeHtml(mech.value)}</div>`
+              html += `<button class="action-btn" data-action="add-calendar" data-domain="${escapeAttr(analysis.targetDomain)}" data-datatype="${escapeAttr(dt.dataType)}">Add to Calendar</button>`
             } else if (mech.type === 'account_steps') {
-              html += `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">📋 ${escapeHtml(mech.value)}</div>`
+              html += `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">Steps: ${escapeHtml(mech.value)}</div>`
             }
             if (mech.instructionText) {
               html += `<div style="font-size: 10px; color: var(--text-muted); font-style: italic; margin-bottom: 4px;">${escapeHtml(mech.instructionText)}</div>`
@@ -600,7 +611,7 @@ function renderPolicyAnalysis(analysis) {
   if (analysis.analysisWarnings && analysis.analysisWarnings.length > 0) {
     const warnings = document.createElement('div')
     warnings.className = 'policy-analysis-warnings'
-    warnings.innerHTML = analysis.analysisWarnings.map(w => `<div>⚠ ${escapeHtml(w)}</div>`).join('')
+    warnings.innerHTML = analysis.analysisWarnings.map(w => `<div><span class="status-dot warning"></span> ${escapeHtml(w)}</div>`).join('')
     container.appendChild(warnings)
   }
 
@@ -629,7 +640,7 @@ function handlePolicyActionClick(e) {
     const url = btn.getAttribute('data-url')
     if (url) {
       chrome.tabs.create({ url })
-      btn.textContent = '✅ Opened'
+      btn.textContent = 'Opened'
       btn.disabled = true
     }
   } else if (action === 'send-email') {
@@ -639,7 +650,7 @@ function handlePolicyActionClick(e) {
     if (email) {
       const mailtoLink = buildMailtoLink(email, domain, dataType)
       chrome.tabs.create({ url: mailtoLink })
-      btn.textContent = '✅ Opened'
+      btn.textContent = 'Opened'
       btn.disabled = true
     }
   } else if (action === 'add-calendar') {
@@ -648,7 +659,7 @@ function handlePolicyActionClick(e) {
     const icsContent = buildIcsContent(domain, dataType, 3)
     const filename = `optout-reminder-${domain}-${(dataType || '').replace(/\s+/g, '-')}.ics`
     downloadIcsBlob(icsContent, filename)
-    btn.textContent = '📅 Downloaded!'
+    btn.textContent = 'Downloaded'
     btn.disabled = true
   }
 }
@@ -683,7 +694,7 @@ async function analyzePolicyFromPopup(domain, policyUrlFromScan) {
 
   // Show loading state
   if (btn) {
-    btn.textContent = '⏳ Analyzing...'
+    btn.textContent = 'Analyzing...'
     btn.disabled = true
   }
   if (loadingEl) loadingEl.classList.remove('hidden')
@@ -774,12 +785,12 @@ async function analyzePolicyFromPopup(domain, policyUrlFromScan) {
       // Show retry button if retryable
       if (response && response.error && response.error.retryable) {
         if (btn) {
-          btn.textContent = '🔄 Retry Analysis'
+          btn.textContent = 'Retry Analysis'
           btn.disabled = false
           btn.classList.remove('hidden')
         }
       } else if (btn) {
-        btn.textContent = '🔍 Analyze Privacy Policy'
+        btn.textContent = 'Analyze Privacy Policy'
         btn.disabled = false
         btn.classList.remove('hidden')
       }
@@ -790,7 +801,7 @@ async function analyzePolicyFromPopup(domain, policyUrlFromScan) {
     contentDiv.innerHTML = `<div class="policy-analysis-error">${escapeHtml(err.message || 'An unexpected error occurred.')}</div>`
 
     if (btn) {
-      btn.textContent = '🔍 Analyze Privacy Policy'
+      btn.textContent = 'Analyze Privacy Policy'
       btn.disabled = false
       btn.classList.remove('hidden')
     }
@@ -905,7 +916,7 @@ async function init() {
     el('section-breaches').querySelector('.breach-tabs').classList.add('hidden')
     el('domain-breach-list').innerHTML = `
       <div style="text-align: center; padding: 12px 0;">
-        <div style="font-size: 20px; margin-bottom: 6px;">🛡️</div>
+        <div style="margin-bottom: 6px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--risk-low);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
         <p class="no-breach-msg" style="font-weight: 500;">No breaches found</p>
         <p class="no-breach-caveat">We check the Have I Been Pwned database. No record doesn't guarantee safety.</p>
       </div>
