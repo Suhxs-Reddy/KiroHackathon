@@ -415,6 +415,384 @@ function updateBookmarkBtn(btn, isBookmarked) {
   }
 }
 
+// ─── AI Policy Analysis ───────────────────────────────────────────────────
+
+/**
+ * Build a mailto: link for opt-out email requests.
+ */
+function buildMailtoLink(emailAddress, domain, dataType) {
+  const subject = `Data Opt-Out Request — ${domain}`
+  const body = [
+    `Dear ${domain} Privacy Team,`,
+    '',
+    `I am a user of ${domain} and I am writing to request that you opt me out of ` +
+      `the collection and/or sharing of my ${dataType} data.`,
+    '',
+    'I am making this request pursuant to applicable privacy regulations, including ' +
+      'but not limited to the GDPR, CCPA, and other relevant data protection laws.',
+    '',
+    'Please confirm that my request has been processed and provide a timeline ' +
+      'for when the opt-out will take effect.',
+    '',
+    'Thank you for your prompt attention to this matter.',
+    '',
+    'Sincerely,',
+    '[Your Name]',
+  ].join('\n')
+
+  return `mailto:${emailAddress}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+}
+
+/**
+ * Build an .ics calendar file for postal mail reminders.
+ */
+function buildIcsContent(domain, dataType, delayDays) {
+  const now = new Date()
+  const eventDate = new Date(now.getTime() + delayDays * 24 * 60 * 60 * 1000)
+
+  const fmt = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
+
+  const title = `Send opt-out letter to ${domain} (${dataType})`
+  const description = `Reminder to send your opt-out letter for ${dataType} data to ${domain}. Include your name, address, and a clear statement requesting opt-out.`
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//DataGuard//Opt-Out Reminder//EN',
+    'BEGIN:VEVENT',
+    `DTSTART:${fmt(eventDate)}`,
+    `DTEND:${fmt(new Date(eventDate.getTime() + 30 * 60 * 1000))}`,
+    `SUMMARY:${title}`,
+    `DESCRIPTION:${description.replace(/\n/g, '\\n')}`,
+    'BEGIN:VALARM',
+    'TRIGGER:-PT30M',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${title}`,
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n')
+}
+
+/**
+ * Download an .ics file via Blob URL.
+ */
+function downloadIcsBlob(icsContent, filename) {
+  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.style.display = 'none'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * Render a Risk_Analysis object into the policy analysis content area.
+ */
+function renderPolicyAnalysis(analysis) {
+  const container = el('policy-analysis-content')
+  container.innerHTML = ''
+
+  // Hide the analyze button since we have results
+  const btn = el('analyze-policy-btn')
+  if (btn) btn.classList.add('hidden')
+
+  // Key Takeaways
+  if (analysis.policySummary && analysis.policySummary.length > 0) {
+    const summaryBox = document.createElement('div')
+    summaryBox.className = 'policy-summary'
+    summaryBox.innerHTML = `
+      <div class="policy-summary-title">📋 Key Takeaways</div>
+      <ul>
+        ${analysis.policySummary.map(point => `<li>${escapeHtml(point)}</li>`).join('')}
+      </ul>
+    `
+    container.appendChild(summaryBox)
+  }
+
+  // Data type cards
+  if (analysis.dataTypes && analysis.dataTypes.length > 0) {
+    for (const dt of analysis.dataTypes) {
+      const card = document.createElement('div')
+      card.className = `data-type-card risk-${dt.riskLevel}`
+
+      // Header: name + risk pill
+      let html = `
+        <div class="data-type-header">
+          <span class="data-type-name">${escapeHtml(dt.dataType)}</span>
+          <span class="risk-pill ${dt.riskLevel}">${dt.riskLevel}</span>
+        </div>
+      `
+
+      // Purposes
+      if (dt.purposes && dt.purposes.length > 0) {
+        html += `<div class="data-type-purposes">${escapeHtml(dt.purposes.slice(0, 3).join(', '))}</div>`
+      }
+
+      // Third-party sharing
+      if (dt.sharedWithThirdParties) {
+        const cats = dt.thirdPartyCategories && dt.thirdPartyCategories.length > 0
+          ? ` (${escapeHtml(dt.thirdPartyCategories.join(', '))})`
+          : ''
+        html += `<div class="data-type-third-party">⚠ Shared with third parties${cats}</div>`
+      }
+
+      // Warning note
+      if (dt.warningNote) {
+        html += `<div class="data-type-warning">⚠ ${escapeHtml(dt.warningNote)}</div>`
+      }
+
+      // Opt-out indicator
+      const guidance = dt.optOutGuidance
+      if (guidance) {
+        const statusLabels = {
+          available: '✅ Opt-out available',
+          vague: '⚠️ Vague opt-out language',
+          unavailable: '❌ No opt-out found',
+        }
+        const statusClass = guidance.status || 'unavailable'
+        html += `<div class="optout-indicator ${statusClass}">${statusLabels[statusClass] || statusLabels.unavailable}</div>`
+
+        // Action buttons for available mechanisms
+        if (guidance.status === 'available' && guidance.mechanisms && guidance.mechanisms.length > 0) {
+          html += '<div class="data-type-actions">'
+          for (const mech of guidance.mechanisms) {
+            if (mech.type === 'settings_url' || mech.type === 'web_form') {
+              html += `<button class="action-btn primary" data-action="open-url" data-url="${escapeAttr(mech.value)}">🔗 Opt Out</button>`
+            } else if (mech.type === 'email') {
+              html += `<button class="action-btn primary" data-action="send-email" data-email="${escapeAttr(mech.value)}" data-domain="${escapeAttr(analysis.targetDomain)}" data-datatype="${escapeAttr(dt.dataType)}">✉️ Send Email</button>`
+            } else if (mech.type === 'postal_mail') {
+              html += `<button class="action-btn" data-action="add-calendar" data-domain="${escapeAttr(analysis.targetDomain)}" data-datatype="${escapeAttr(dt.dataType)}">📅 Add to Calendar</button>`
+            }
+          }
+          html += '</div>'
+        }
+      }
+
+      card.innerHTML = html
+      container.appendChild(card)
+    }
+  } else {
+    const noData = document.createElement('div')
+    noData.style.cssText = 'font-size: 13px; color: var(--text-secondary); font-style: italic; padding: 8px 0;'
+    noData.textContent = 'No personal data collection detected in the policy.'
+    container.appendChild(noData)
+  }
+
+  // Analysis warnings
+  if (analysis.analysisWarnings && analysis.analysisWarnings.length > 0) {
+    const warnings = document.createElement('div')
+    warnings.className = 'policy-analysis-warnings'
+    warnings.innerHTML = analysis.analysisWarnings.map(w => `<div>⚠ ${escapeHtml(w)}</div>`).join('')
+    container.appendChild(warnings)
+  }
+
+  // Model info
+  if (analysis.modelUsed) {
+    const model = document.createElement('div')
+    model.className = 'policy-analysis-model'
+    model.textContent = `Model: ${analysis.modelUsed}`
+    container.appendChild(model)
+  }
+
+  // Wire up action buttons
+  container.querySelectorAll('.action-btn').forEach(actionBtn => {
+    actionBtn.addEventListener('click', handlePolicyActionClick)
+  })
+}
+
+/**
+ * Handle clicks on action buttons inside policy analysis cards.
+ */
+function handlePolicyActionClick(e) {
+  const btn = e.currentTarget
+  const action = btn.getAttribute('data-action')
+
+  if (action === 'open-url') {
+    const url = btn.getAttribute('data-url')
+    if (url) {
+      chrome.tabs.create({ url })
+      btn.textContent = '✅ Opened'
+      btn.disabled = true
+    }
+  } else if (action === 'send-email') {
+    const email = btn.getAttribute('data-email')
+    const domain = btn.getAttribute('data-domain')
+    const dataType = btn.getAttribute('data-datatype')
+    if (email) {
+      const mailtoLink = buildMailtoLink(email, domain, dataType)
+      chrome.tabs.create({ url: mailtoLink })
+      btn.textContent = '✅ Opened'
+      btn.disabled = true
+    }
+  } else if (action === 'add-calendar') {
+    const domain = btn.getAttribute('data-domain')
+    const dataType = btn.getAttribute('data-datatype')
+    const icsContent = buildIcsContent(domain, dataType, 3)
+    const filename = `optout-reminder-${domain}-${(dataType || '').replace(/\s+/g, '-')}.ics`
+    downloadIcsBlob(icsContent, filename)
+    btn.textContent = '📅 Downloaded!'
+    btn.disabled = true
+  }
+}
+
+/**
+ * Escape HTML entities for safe insertion.
+ */
+function escapeHtml(str) {
+  if (!str) return ''
+  const div = document.createElement('div')
+  div.textContent = str
+  return div.innerHTML
+}
+
+/**
+ * Escape a string for use in an HTML attribute.
+ */
+function escapeAttr(str) {
+  if (!str) return ''
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/**
+ * Trigger policy analysis from the popup.
+ * Reads stored metadata for the domain, finds the first policy URL,
+ * sends INITIATE_ANALYSIS to background, and renders results.
+ */
+async function analyzePolicyFromPopup(domain) {
+  const btn = el('analyze-policy-btn')
+  const loadingEl = el('policy-analysis-loading')
+  const contentEl = el('policy-analysis-content')
+
+  // Show loading state
+  if (btn) {
+    btn.textContent = '⏳ Analyzing...'
+    btn.disabled = true
+  }
+  if (loadingEl) loadingEl.classList.remove('hidden')
+  if (contentEl) contentEl.innerHTML = ''
+
+  try {
+    // Step 1: Get stored metadata for this domain (content script stores it as metadata_{domain})
+    const metadataKey = `metadata_${domain}`
+    const stored = await new Promise(resolve => {
+      chrome.storage.local.get([metadataKey], result => resolve(result[metadataKey] || null))
+    })
+
+    let policyUrl = null
+
+    if (stored && stored.detectedPolicyLinks && stored.detectedPolicyLinks.length > 0) {
+      // Prefer privacy_policy type, fall back to first link
+      const privacyLink = stored.detectedPolicyLinks.find(l => l.linkType === 'privacy_policy')
+      policyUrl = privacyLink ? privacyLink.url : stored.detectedPolicyLinks[0].url
+    }
+
+    if (!policyUrl) {
+      // Fallback: try to ask the content script for policy links
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (tab && tab.id) {
+        try {
+          const resp = await chrome.tabs.sendMessage(tab.id, { type: 'GET_POLICY_LINKS' })
+          if (resp && resp.links && resp.links.length > 0) {
+            const privacyLink = resp.links.find(l => l.linkType === 'privacy_policy')
+            policyUrl = privacyLink ? privacyLink.url : resp.links[0].url
+          }
+        } catch (_) {
+          // Content script may not support this message — that's fine
+        }
+      }
+    }
+
+    if (!policyUrl) {
+      throw new Error('No privacy policy link found for this site. The content script may not have detected one.')
+    }
+
+    // Step 2: Send INITIATE_ANALYSIS to background
+    const response = await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(
+        { type: 'INITIATE_ANALYSIS', payload: { policyUrl } },
+        (resp) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message))
+          } else {
+            resolve(resp)
+          }
+        }
+      )
+    })
+
+    if (loadingEl) loadingEl.classList.add('hidden')
+
+    if (response && response.success && response.analysis) {
+      // Cache the analysis result for this domain
+      await new Promise(resolve => {
+        chrome.storage.local.set({ [`policy_analysis_${domain}`]: response.analysis }, resolve)
+      })
+
+      renderPolicyAnalysis(response.analysis)
+    } else {
+      // Show error
+      const errorMsg = (response && response.error && response.error.message)
+        ? response.error.message
+        : 'Analysis failed. Please check your API key in Settings.'
+      const contentDiv = el('policy-analysis-content')
+      contentDiv.innerHTML = `<div class="policy-analysis-error">${escapeHtml(errorMsg)}</div>`
+
+      // Show retry button if retryable
+      if (response && response.error && response.error.retryable) {
+        if (btn) {
+          btn.textContent = '🔄 Retry Analysis'
+          btn.disabled = false
+          btn.classList.remove('hidden')
+        }
+      } else if (btn) {
+        btn.textContent = '🔍 Analyze Privacy Policy'
+        btn.disabled = false
+        btn.classList.remove('hidden')
+      }
+    }
+  } catch (err) {
+    if (loadingEl) loadingEl.classList.add('hidden')
+    const contentDiv = el('policy-analysis-content')
+    contentDiv.innerHTML = `<div class="policy-analysis-error">${escapeHtml(err.message || 'An unexpected error occurred.')}</div>`
+
+    if (btn) {
+      btn.textContent = '🔍 Analyze Privacy Policy'
+      btn.disabled = false
+      btn.classList.remove('hidden')
+    }
+  }
+}
+
+/**
+ * Initialize the policy analysis section: check for cached results, wire up button.
+ */
+async function initPolicyAnalysis(domain) {
+  const btn = el('analyze-policy-btn')
+  const contentEl = el('policy-analysis-content')
+
+  // Check for cached analysis
+  const cacheKey = `policy_analysis_${domain}`
+  const cached = await new Promise(resolve => {
+    chrome.storage.local.get([cacheKey], result => resolve(result[cacheKey] || null))
+  })
+
+  if (cached) {
+    renderPolicyAnalysis(cached)
+  }
+
+  // Wire up the analyze button
+  if (btn) {
+    btn.addEventListener('click', () => {
+      analyzePolicyFromPopup(domain)
+    })
+  }
+}
+
 // ─── Main flow ────────────────────────────────────────────────────────────────
 
 async function init() {
@@ -489,6 +867,7 @@ async function init() {
   renderOptOut(pageData.domain)
   renderScanTime()
   initBookmarkBtn(pageData.domain)
+  initPolicyAnalysis(pageData.domain)
 
   // Settings link
   document.getElementById('settings-link').addEventListener('click', (e) => {
