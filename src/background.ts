@@ -292,7 +292,9 @@ chrome.runtime.onMessage.addListener(
     // ─── DataGuard: Breach Data Message Handlers ──────────────────────────────
 
     if (message.type === 'GET_BREACH_DATA') {
-      const { domain, categories } = message.payload as { domain: string; categories?: string[] };
+      // DataGuard popup sends domain/categories directly on message, not inside payload
+      const domain = (message as any).domain || (message as any).payload?.domain || '';
+      const categories = (message as any).categories || (message as any).payload?.categories || [];
       getBreaches().then(allBreaches => {
         const domainBreaches = getBreachesForDomain(allBreaches, domain);
         const categoryBreaches = getBreachesForCategories(allBreaches, categories || []);

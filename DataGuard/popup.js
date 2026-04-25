@@ -678,9 +678,13 @@ async function analyzePolicyFromPopup(domain) {
 
   try {
     // Step 1: Get stored metadata for this domain (content script stores it as metadata_{domain})
+    // Try both with and without www. prefix since content script uses window.location.hostname
     const metadataKey = `metadata_${domain}`
+    const metadataKeyWww = `metadata_www.${domain}`
     const stored = await new Promise(resolve => {
-      chrome.storage.local.get([metadataKey], result => resolve(result[metadataKey] || null))
+      chrome.storage.local.get([metadataKey, metadataKeyWww], result => {
+        resolve(result[metadataKey] || result[metadataKeyWww] || null)
+      }))
     })
 
     let policyUrl = null
@@ -708,7 +712,24 @@ async function analyzePolicyFromPopup(domain) {
     }
 
     if (!policyUrl) {
-      throw new Error('No privacy policy link found for this site. The content script may not have detected one.')
+      // Fallback: try common privacy policy URL patterns
+      const commonPaths = ['/privacy', '/privacy-policy', '/legal/privacy', '/about/privacy']
+      for (const path of commonPaths) {
+        try {
+          const testUrl = `https://${domain}${path}`
+          const resp = await fetch(testUrl, { method: 'HEAD', redirect: 'follow' })
+          if (resp.ok) {
+            policyUrl = testUrl
+            break
+          }
+        } catch (_) {
+          // Try next path
+        }
+      }
+    }
+
+    if (!policyUrl) {
+      throw new Error('No privacy policy link found. Try visiting the site first so DataGuard can detect policy links.')
     }
 
     // Step 2: Send INITIATE_ANALYSIS to background
