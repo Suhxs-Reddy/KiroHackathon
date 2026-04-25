@@ -837,7 +837,7 @@ async function init() {
   } catch (err) {
     // Content script may not be injected yet — try scripting API
     try {
-      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] })
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['DataGuard/content.js'] })
       const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_DATA' })
       if (!response || !response.success) throw new Error(response?.error || 'Injection failed')
       pageData = response.data
