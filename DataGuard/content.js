@@ -256,25 +256,57 @@ function findTermsAgreementElements() {
   const candidates = document.querySelectorAll('label, p, span, div')
   for (const el of candidates) {
     const text = (el.textContent || '').trim()
-    if (text.length < 10 || text.length > 500) continue
+    if (text.length < 10 || text.length > 1000) continue
     if (!AGREE_PATTERNS.some(p => p.test(text))) continue
-    // Skip if this element is inside another match
-    if (el.closest('.dataguard-inline-badge') || el.closest('.dataguard-dashboard')) continue
+    if (el.closest('.dataguard-inline-badge') || el.closest('.dataguard-dashboard-frame')) continue
 
+    // Look for policy links INSIDE this element
+    let policyLinks = []
     const links = el.querySelectorAll('a[href]')
-    const policyLinks = []
     for (const link of links) {
       const linkText = (link.textContent || '').toLowerCase()
       const href = link.getAttribute('href') || ''
-      if (/privacy|terms|policy|tos|data/i.test(linkText + ' ' + href)) {
+      if (/privacy|terms|policy|tos|data|legal/i.test(linkText + ' ' + href)) {
         try {
           policyLinks.push({ url: new URL(href, window.location.href).href, text: link.textContent.trim() })
         } catch (_) {}
       }
     }
+
+    // If no links found inside, search the PARENT and nearby siblings
+    if (policyLinks.length === 0) {
+      const parent = el.parentElement
+      if (parent) {
+        const parentLinks = parent.querySelectorAll('a[href]')
+        for (const link of parentLinks) {
+          const linkText = (link.textContent || '').toLowerCase()
+          const href = link.getAttribute('href') || ''
+          if (/privacy|terms|policy|tos|data|legal/i.test(linkText + ' ' + href)) {
+            try {
+              policyLinks.push({ url: new URL(href, window.location.href).href, text: link.textContent.trim() })
+            } catch (_) {}
+          }
+        }
+      }
+    }
+
+    // If still no links, try finding ANY privacy/terms link on the page
+    if (policyLinks.length === 0) {
+      const allLinks = document.querySelectorAll('a[href]')
+      for (const link of allLinks) {
+        const linkText = (link.textContent || '').toLowerCase()
+        const href = link.getAttribute('href') || ''
+        if (/privacy\s*policy|terms\s*of\s*service|data\s*policy/i.test(linkText)) {
+          try {
+            policyLinks.push({ url: new URL(href, window.location.href).href, text: link.textContent.trim() })
+          } catch (_) {}
+        }
+      }
+    }
+
     if (policyLinks.length > 0) {
       results.push({ element: el, policyLinks })
-      break // Only take the FIRST match
+      break
     }
   }
   return results
