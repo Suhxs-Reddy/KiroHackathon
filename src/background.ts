@@ -88,19 +88,37 @@ async function getBreaches(): Promise<HIBPBreach[]> {
 
 function getBreachesForDomain(allBreaches: HIBPBreach[], domain: string): HIBPBreach[] {
   const domainLower = domain.toLowerCase().replace(/^www\./, '');
-  // Extract root domain (e.g., "auth.meta.com" → "meta.com", "facebook.com" → "facebook.com")
   const parts = domainLower.split('.');
   const rootDomain = parts.length > 2 ? parts.slice(-2).join('.') : domainLower;
+  // Extract the brand name from domain (e.g., "facebook" from "facebook.com", "meta" from "auth.meta.com")
+  const brandName = rootDomain.split('.')[0];
 
   return allBreaches
     .filter(b => {
       const breachDomain = (b.Domain || '').toLowerCase().replace(/^www\./, '');
-      // Match exact domain, subdomains, or root domain
-      return breachDomain === domainLower ||
-             breachDomain === rootDomain ||
-             breachDomain.endsWith('.' + domainLower) ||
-             breachDomain.endsWith('.' + rootDomain) ||
-             domainLower.endsWith('.' + breachDomain);
+      const breachName = (b.Name || '').toLowerCase();
+
+      // Domain matching
+      if (breachDomain === domainLower || breachDomain === rootDomain) return true;
+      if (breachDomain.endsWith('.' + domainLower) || breachDomain.endsWith('.' + rootDomain)) return true;
+      if (domainLower.endsWith('.' + breachDomain)) return true;
+
+      // Name/brand matching — check if breach name contains the brand or vice versa
+      if (brandName.length >= 3 && breachName.includes(brandName)) return true;
+      if (breachName.length >= 3 && domainLower.includes(breachName)) return true;
+
+      // Known company aliases (meta ↔ facebook, google ↔ alphabet, etc.)
+      const ALIASES: Record<string, string[]> = {
+        'meta': ['facebook', 'instagram', 'whatsapp', 'meta'],
+        'facebook': ['meta', 'facebook', 'instagram'],
+        'google': ['alphabet', 'google', 'youtube'],
+        'alphabet': ['google', 'alphabet'],
+        'microsoft': ['microsoft', 'linkedin', 'github'],
+      };
+      const brandAliases = ALIASES[brandName] || [];
+      if (brandAliases.some(alias => breachName.includes(alias) || breachDomain.includes(alias))) return true;
+
+      return false;
     })
     .sort((a, b) => new Date(b.BreachDate).getTime() - new Date(a.BreachDate).getTime());
 }
