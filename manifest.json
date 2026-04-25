@@ -25,5 +25,11 @@
     "16": "DataGuard/icons/icon16.png",
     "48": "DataGuard/icons/icon48.png",
     "128": "DataGuard/icons/icon128.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["DataGuard/popup.html", "DataGuard/popup.css", "DataGuard/popup.js", "DataGuard/icons/*", "DataGuard/data/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

@@ -905,6 +905,24 @@ async function initPolicyAnalysis(domain, policyUrlFromScan) {
   const btn = el('analyze-policy-btn')
   const contentEl = el('policy-analysis-content')
 
+  // Check if auto-render was triggered from inline badge
+  const autoRender = await new Promise(resolve => {
+    chrome.storage.local.get(['_dataguard_auto_render', `policy_analysis_${domain}`], result => {
+      if (result._dataguard_auto_render === domain && result[`policy_analysis_${domain}`]) {
+        // Clear the flag
+        chrome.storage.local.remove('_dataguard_auto_render')
+        resolve(result[`policy_analysis_${domain}`])
+      } else {
+        resolve(null)
+      }
+    })
+  })
+
+  if (autoRender) {
+    renderPolicyAnalysis(autoRender)
+    return
+  }
+
   // No cache — always show the analyze button, run fresh analysis each time
 
   // Wire up the analyze button

@@ -281,49 +281,53 @@ function findTermsAgreementElements() {
 }
 
 function buildDashboardHtml(analysis) {
-  const risk = analysis.overallRiskLevel || 'medium'
-  const riskColors = { high: '#DC2626', medium: '#D97706', low: '#059669' }
-  const riskBgs = { high: '#FEF2F2', medium: '#FFFBEB', low: '#ECFDF5' }
-  const rc = riskColors[risk] || riskColors.medium
+  // Not used anymore — we use an iframe to show the full popup UI
+  return ''
+}
 
-  let html = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <div style="font-weight:700;font-size:14px;color:#1F2937;">DataGuard Analysis</div>
-      <div style="display:flex;align-items:center;gap:4px;padding:3px 10px;border-radius:8px;background:${riskBgs[risk]};color:${rc};font-size:11px;font-weight:700;letter-spacing:0.03em;">${risk.toUpperCase()} RISK</div>
-      <button class="dataguard-close" style="background:none;border:none;font-size:18px;cursor:pointer;color:#9CA3AF;padding:0;line-height:1;">&times;</button>
-    </div>
+function openDashboardIframe(analysis) {
+  const existing = document.querySelector('.dataguard-dashboard-frame')
+  if (existing) { existing.remove(); return }
+
+  // Store analysis so popup can read it
+  const domain = window.location.hostname.replace(/^www\./, '')
+  chrome.storage.local.set({ [`policy_analysis_${domain}`]: analysis, '_dataguard_auto_render': domain })
+
+  // Create iframe container
+  const container = document.createElement('div')
+  container.className = 'dataguard-dashboard-frame'
+  container.style.cssText = `
+    position: fixed; top: 10px; right: 10px; width: 370px; height: 560px;
+    z-index: 2147483647; border: none; border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.2); overflow: hidden;
+    animation: dataguardSlideIn 0.25s ease-out;
   `
 
-  // Key takeaways
-  if (analysis.policySummary && analysis.policySummary.length > 0) {
-    html += `<div style="background:#FFFBEB;border:1px solid #FDE68A;border-left:3px solid #F59E0B;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:11px;color:#92400E;line-height:1.5;">
-      <div style="font-weight:600;margin-bottom:4px;">Key Takeaways</div>
-      <ul style="margin:0;padding-left:14px;list-style:disc;">${analysis.policySummary.map(p => `<li style="margin-bottom:2px;">${p}</li>`).join('')}</ul>
-    </div>`
+  if (!document.querySelector('#dataguard-anim-style')) {
+    const style = document.createElement('style')
+    style.id = 'dataguard-anim-style'
+    style.textContent = `@keyframes dataguardSlideIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }`
+    document.head.appendChild(style)
   }
 
-  // Data types
-  if (analysis.dataTypes && analysis.dataTypes.length > 0) {
-    html += `<div style="max-height:200px;overflow-y:auto;">`
-    for (const dt of analysis.dataTypes) {
-      const dtc = riskColors[dt.riskLevel] || '#6B7280'
-      const dtbg = riskBgs[dt.riskLevel] || '#F9FAFB'
-      html += `<div style="background:#F9FAFB;border:1px solid #E5E7EB;border-left:3px solid ${dtc};border-radius:6px;padding:8px 10px;margin-bottom:6px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <span style="font-weight:600;font-size:12px;color:#1F2937;">${dt.dataType}</span>
-          <span style="font-size:9px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:10px;background:${dtbg};color:${dtc};">${dt.riskLevel}</span>
-        </div>
-        ${dt.purposes && dt.purposes.length > 0 ? `<div style="font-size:10px;color:#6B7280;margin-top:2px;">${dt.purposes.slice(0,2).join(', ')}</div>` : ''}
-        ${dt.sharedWithThirdParties ? `<div style="font-size:10px;color:#DC2626;margin-top:2px;">Shared with third parties</div>` : ''}
-        ${dt.optOutGuidance && dt.optOutGuidance.status === 'available' ? `<div style="font-size:10px;color:#059669;margin-top:2px;">Opt-out available</div>` : ''}
-        ${dt.optOutGuidance && dt.optOutGuidance.status === 'unavailable' ? `<div style="font-size:10px;color:#9CA3AF;margin-top:2px;">No opt-out found</div>` : ''}
-      </div>`
-    }
-    html += `</div>`
-  }
+  // Close button overlay
+  const closeBtn = document.createElement('button')
+  closeBtn.textContent = '×'
+  closeBtn.style.cssText = `
+    position: absolute; top: 6px; right: 10px; z-index: 2147483648;
+    background: rgba(255,255,255,0.9); border: 1px solid #E5E7EB; border-radius: 50%;
+    width: 24px; height: 24px; font-size: 16px; line-height: 1; cursor: pointer;
+    color: #6B7280; display: flex; align-items: center; justify-content: center;
+  `
+  closeBtn.addEventListener('click', () => container.remove())
 
-  html += `<div style="font-size:9px;color:#9CA3AF;margin-top:6px;">Model: ${analysis.modelUsed || 'AI'}</div>`
-  return html
+  const iframe = document.createElement('iframe')
+  iframe.src = chrome.runtime.getURL('DataGuard/popup.html')
+  iframe.style.cssText = 'width: 100%; height: 100%; border: none; border-radius: 14px;'
+
+  container.appendChild(closeBtn)
+  container.appendChild(iframe)
+  document.body.appendChild(container)
 }
 
 function injectRiskBadge(element, policyLinks) {
@@ -397,34 +401,10 @@ function injectRiskBadge(element, policyLinks) {
       badge.style.color = c.text
       textEl.textContent = `${risk.toUpperCase()} RISK · ${count} data types — Click for details`
 
-      // Click opens inline dashboard
+      // Click opens inline dashboard (iframe with full popup UI)
       badge.addEventListener('click', (e) => {
         e.stopPropagation()
-        const existing = document.querySelector('.dataguard-dashboard')
-        if (existing) { existing.remove(); return }
-
-        const dashboard = document.createElement('div')
-        dashboard.className = 'dataguard-dashboard'
-        dashboard.style.cssText = `
-          position: fixed; top: 20px; right: 20px; width: 340px; max-height: 500px;
-          overflow-y: auto; background: #fff; border: 2px solid #2563EB;
-          border-radius: 12px; padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.15);
-          z-index: 2147483647; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          font-size: 13px; color: #1F2937; animation: dataguardSlideIn 0.25s ease-out;
-        `
-        if (!document.querySelector('#dataguard-anim-style')) {
-          const style = document.createElement('style')
-          style.id = 'dataguard-anim-style'
-          style.textContent = `
-            @keyframes dataguardSlideIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
-            .dataguard-dashboard::-webkit-scrollbar { width: 4px; }
-            .dataguard-dashboard::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 2px; }
-          `
-          document.head.appendChild(style)
-        }
-        dashboard.innerHTML = buildDashboardHtml(analysis)
-        document.body.appendChild(dashboard)
-        dashboard.querySelector('.dataguard-close').addEventListener('click', () => dashboard.remove())
+        openDashboardIframe(analysis)
       })
     })
   }, 1000) // check every second
