@@ -88,10 +88,19 @@ async function getBreaches(): Promise<HIBPBreach[]> {
 
 function getBreachesForDomain(allBreaches: HIBPBreach[], domain: string): HIBPBreach[] {
   const domainLower = domain.toLowerCase().replace(/^www\./, '');
+  // Extract root domain (e.g., "auth.meta.com" → "meta.com", "facebook.com" → "facebook.com")
+  const parts = domainLower.split('.');
+  const rootDomain = parts.length > 2 ? parts.slice(-2).join('.') : domainLower;
+
   return allBreaches
     .filter(b => {
       const breachDomain = (b.Domain || '').toLowerCase().replace(/^www\./, '');
-      return breachDomain === domainLower || breachDomain.endsWith('.' + domainLower);
+      // Match exact domain, subdomains, or root domain
+      return breachDomain === domainLower ||
+             breachDomain === rootDomain ||
+             breachDomain.endsWith('.' + domainLower) ||
+             breachDomain.endsWith('.' + rootDomain) ||
+             domainLower.endsWith('.' + breachDomain);
     })
     .sort((a, b) => new Date(b.BreachDate).getTime() - new Date(a.BreachDate).getTime());
 }
