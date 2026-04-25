@@ -259,21 +259,12 @@ chrome.runtime.onMessage.addListener(
 
 async function handlePolicyDetected(
   message: PolicyDetectedMessage,
-  sender: chrome.runtime.MessageSender
+  _sender: chrome.runtime.MessageSender
 ) {
+  // Store metadata so the popup can read it
   await chrome.storage.local.set({
     [`metadata_${message.payload.domain}`]: message.payload,
   });
-
-  if (sender.tab?.id) {
-    chrome.tabs.sendMessage(sender.tab.id, {
-      type: 'SHOW_ALERT_POPUP',
-      payload: {
-        policyLinks: message.payload.detectedPolicyLinks,
-        hasConsentDialog: message.payload.hasConsentDialog,
-      },
-    } as ExtensionMessage);
-  }
 }
 
 async function handleInitiateAnalysis(
@@ -282,6 +273,12 @@ async function handleInitiateAnalysis(
 ) {
   try {
     const analysis = await runAnalysisPipeline(message.payload);
+
+    // Store results in chrome.storage so the popup can always read them
+    const storageKey = `analysis_${analysis.targetDomain}`;
+    await chrome.storage.local.set({ [storageKey]: analysis, lastAnalysis: analysis });
+    // Clear any previous error
+    await chrome.storage.local.remove('lastAnalysisError');
 
     if (sender.tab?.id) {
       chrome.tabs.sendMessage(sender.tab.id, {
@@ -293,6 +290,16 @@ async function handleInitiateAnalysis(
     return { success: true, analysis };
   } catch (error) {
     if (error instanceof AnalysisError) {
+      // Store error so popup can display it
+      await chrome.storage.local.set({
+        lastAnalysisError: {
+          code: error.code,
+          message: error.message,
+          retryable: error.retryable,
+          manualInputFallback: error.manualInputFallback,
+        },
+      });
+
       if (sender.tab?.id) {
         chrome.tabs.sendMessage(sender.tab.id, {
           type: 'ANALYSIS_ERROR',

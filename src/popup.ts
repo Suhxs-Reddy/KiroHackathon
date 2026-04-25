@@ -1,137 +1,41 @@
 /**
- * popup.ts — Merged DataGuard popup
- * Orchestrates: page data from content script, breach data from background,
- * AI policy analysis, jurisdiction rights, and opt-out guidance.
+ * popup.ts — DataGuard popup
+ * Single UI for: AI policy analysis, breach history, opt-out guidance,
+ * jurisdiction rights, and debug logging.
  */
 
 import type {
   FieldCategoryId,
-  FieldDetail,
-  TrackerInfo,
   PageScanResult,
   RiskLevel,
   HIBPBreach,
   OptOutDatabaseEntry,
   OptOutAlternative,
-  ExtensionMessage,
   JurisdictionId,
-  PrivacyRight,
 } from './types.js';
 
-// ─── Category metadata ────────────────────────────────────────────────────────
+// ─── Debug logger (writes to the popup's debug panel) ─────────────────────────
 
-const CATEGORY_META: Record<FieldCategoryId, { label: string; icon: string; cssClass: string; description: string; usedFor: string }> = {
-  FINANCIAL:     { label: 'Financial',      icon: '\u{1F4B3}', cssClass: 'financial',
-    description: 'This site collects financial information such as credit/debit card numbers, CVV codes, or billing details.',
-    usedFor: 'Used for payment processing. Exposed in breaches, this data enables fraud and identity theft.' },
-  GOVERNMENT_ID: { label: 'Government ID',  icon: '\u{1FAAA}', cssClass: 'government_id',
-    description: 'This site collects government-issued identification such as Social Security Numbers, passport numbers, or driver\'s license numbers.',
-    usedFor: 'Used for identity verification. Extremely sensitive \u2014 exposure enables identity theft.' },
-  AUTH:          { label: 'Authentication', icon: '\u{1F510}', cssClass: 'auth',
-    description: 'This site collects authentication credentials such as passwords, PINs, or security question answers.',
-    usedFor: 'Used to verify your identity. Exposed passwords can compromise all accounts where you reuse them.' },
-  IDENTITY:      { label: 'Identity',       icon: '\u{1F464}', cssClass: 'identity',
-    description: 'This site collects personal identity information such as your full name, date of birth, or home address.',
-    usedFor: 'Used for account creation and verification. Can be combined with other data for identity theft.' },
-  CONTACT:       { label: 'Contact',        icon: '\u{1F4EC}', cssClass: 'contact',
-    description: 'This site collects contact information such as your email address or phone number.',
-    usedFor: 'Used for communication and account recovery. Often sold to data brokers or used for spam.' },
-  SENSITIVE:     { label: 'Sensitive',      icon: '\u{2695}\u{FE0F}', cssClass: 'sensitive',
-    description: 'This site collects sensitive personal data such as health information, biometric data, or demographic details.',
-    usedFor: 'Highly sensitive \u2014 can affect insurance, employment, and personal safety if exposed.' },
-};
+const debugLines: string[] = [];
+
+function dbg(msg: string) {
+  const ts = new Date().toLocaleTimeString();
+  debugLines.push(`[${ts}] ${msg}`);
+  console.log(`[DataGuard] ${msg}`);
+}
+
+function renderDebugLog() {
+  const logEl = document.getElementById('debug-log');
+  if (logEl) logEl.textContent = debugLines.join('\n');
+}
+
+// ─── Risk metadata ────────────────────────────────────────────────────────────
 
 const RISK_META: Record<RiskLevel, { label: string; icon: string; cssClass: string }> = {
   high:   { label: 'HIGH RISK',   icon: '\u{1F534}', cssClass: 'high' },
   medium: { label: 'MEDIUM RISK', icon: '\u{1F7E1}', cssClass: 'medium' },
   low:    { label: 'LOW RISK',    icon: '\u{1F7E2}', cssClass: 'low' },
 };
-
-// ─── Risk scorer (inline) ─────────────────────────────────────────────────────
-
-const HIGH_SENSITIVITY_CATS = new Set<FieldCategoryId>(['FINANCIAL', 'GOVERNMENT_ID', 'SENSITIVE', 'AUTH']);
-const SENSITIVITY: Record<string, number> = { FINANCIAL: 5, GOVERNMENT_ID: 5, SENSITIVE: 5, AUTH: 4, IDENTITY: 3, CONTACT: 2 };
-
-function computeRisk({ categories, breaches, hasHttps, policyUrl }: {
-  categories: FieldCategoryId[];
-  breaches: HIBPBreach[];
-  hasHttps: boolean;
-  policyUrl: string | null;
-}): { level: RiskLevel; reasons: string[]; score: number } {
-  const reasons: string[] = [];
-  let score = 0;
-
-  if (categories.length === 0) {
-    return { level: 'low', reasons: ['No data input fields detected on this page.'], score: 0 };
-  }
-
-  const maxSensitivity = Math.max(...categories.map(c => SENSITIVITY[c] ?? 1));
-  score += maxSensitivity * 10;
-
-  const hasHighSensitivity = categories.some(c => HIGH_SENSITIVITY_CATS.has(c));
-
-  if (categories.includes('FINANCIAL'))     reasons.push('This page collects financial information (card number, CVV, or billing details).');
-  if (categories.includes('GOVERNMENT_ID')) reasons.push('This page collects government-issued ID information (SSN, passport, driver\'s license).');
-  if (categories.includes('AUTH'))          reasons.push('This page collects authentication credentials (password or security questions).');
-  if (categories.includes('SENSITIVE'))     reasons.push('This page collects sensitive personal data (health, biometric, or demographic information).');
-  if (categories.includes('IDENTITY'))      reasons.push('This page collects identity information (name, date of birth, or address).');
-  if (categories.includes('CONTACT'))       reasons.push('This page collects contact information (email or phone number).');
-
-  if (!hasHttps) {
-    score += 30;
-    reasons.push('\u26A0\uFE0F This page does not use HTTPS \u2014 data is transmitted unencrypted.');
-  }
-
-  if (!policyUrl) {
-    score += 10;
-    reasons.push('No privacy policy link was found on this page.');
-  }
-
-  const fiveYearsAgo = new Date();
-  fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
-  const recentBreaches = (breaches || []).filter(b => new Date(b.BreachDate) >= fiveYearsAgo);
-
-  if (recentBreaches.length > 0) {
-    score += recentBreaches.length * 15;
-    const latest = recentBreaches[0];
-    reasons.push(
-      `This domain had ${recentBreaches.length} confirmed breach${recentBreaches.length > 1 ? 'es' : ''} in the last 5 years` +
-      (latest ? ` (most recent: ${latest.Name}, ${latest.BreachDate.slice(0, 4)})` : '') + '.'
-    );
-  }
-
-  let level: RiskLevel;
-  if (score >= 50 || (hasHighSensitivity && recentBreaches.length > 0) || !hasHttps) {
-    level = 'high';
-  } else if (score >= 20 || hasHighSensitivity || categories.length >= 2) {
-    level = 'medium';
-  } else {
-    level = 'low';
-  }
-
-  return { level, reasons, score };
-}
-
-// ─── Opt-out database ─────────────────────────────────────────────────────────
-
-let optOutDb: OptOutDatabaseEntry[] = [];
-
-async function loadOptOutDb() {
-  try {
-    const resp = await fetch(chrome.runtime.getURL('data/opt_out_database.json'));
-    optOutDb = await resp.json();
-  } catch (_) {
-    optOutDb = [];
-  }
-}
-
-function findOptOut(domain: string): OptOutDatabaseEntry | null {
-  const d = domain.toLowerCase().replace(/^www\./, '');
-  return optOutDb.find(entry => {
-    const ed = entry.domain.toLowerCase().replace(/^www\./, '');
-    return ed === d || d.endsWith('.' + ed);
-  }) || null;
-}
 
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
 
@@ -148,13 +52,32 @@ function formatNumber(n: number | undefined): string {
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '';
+  try { return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); }
+  catch (_) { return dateStr; }
+}
+
+// ─── Opt-out database ─────────────────────────────────────────────────────────
+
+let optOutDb: OptOutDatabaseEntry[] = [];
+
+async function loadOptOutDb() {
   try {
-    return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch (_) { return dateStr; }
+    const resp = await fetch(chrome.runtime.getURL('data/opt_out_database.json'));
+    optOutDb = await resp.json();
+    dbg(`Loaded opt-out DB: ${optOutDb.length} entries`);
+  } catch (_) { optOutDb = []; }
+}
+
+function findOptOut(domain: string): OptOutDatabaseEntry | null {
+  const d = domain.toLowerCase().replace(/^www\./, '');
+  return optOutDb.find(entry => {
+    const ed = entry.domain.toLowerCase().replace(/^www\./, '');
+    return ed === d || d.endsWith('.' + ed);
+  }) || null;
 }
 
 
-// ─── Render functions ─────────────────────────────────────────────────────────
+// ─── Render: Header ───────────────────────────────────────────────────────────
 
 function renderHeader(pageData: PageScanResult) {
   el('domain-name').textContent = pageData.domain;
@@ -174,97 +97,19 @@ function renderRiskBadge(level: RiskLevel) {
   el('risk-label').textContent = meta.label;
 }
 
-const DATA_USAGE_META: Record<string, { label: string; cssClass: string; dot: string }> = {
-  collected: { label: 'Collected',  cssClass: 'usage-collected', dot: '\u{1F535}' },
-  shared:    { label: 'Shared',     cssClass: 'usage-shared',    dot: '\u{1F7E1}' },
-  sold:      { label: 'Sold',       cssClass: 'usage-sold',      dot: '\u{1F534}' },
-  unknown:   { label: 'Unknown',    cssClass: 'usage-unknown',   dot: '\u26AA' },
-};
-
-function renderCategories(categories: FieldCategoryId[], fieldDetails: FieldDetail[], dataUsage: string) {
-  const pillsContainer = el('category-pills');
-  pillsContainer.innerHTML = '';
-
-  if (categories.length === 0) {
-    show('no-fields');
-    return;
-  }
-
-  hide('no-fields');
-
-  // Legend
-  const legend = document.createElement('div');
-  legend.className = 'usage-legend';
-  legend.innerHTML = `
-    <span class="legend-title">Data usage on this site:</span>
-    <span class="legend-item usage-collected">\u{1F535} Collected</span>
-    <span class="legend-item usage-shared">\u{1F7E1} Shared</span>
-    <span class="legend-item usage-sold">\u{1F534} Sold</span>
-  `;
-  pillsContainer.appendChild(legend);
-
-  const usageMeta = DATA_USAGE_META[dataUsage] || DATA_USAGE_META.unknown;
-  const usageBanner = document.createElement('div');
-  usageBanner.className = `usage-banner ${usageMeta.cssClass}`;
-  const usageText = usageMeta.label === 'Unknown' ? 'has unknown data practices'
-    : usageMeta.label === 'Collected' ? 'only collects your data internally'
-    : usageMeta.label === 'Shared' ? 'shares your data with third parties'
-    : 'sells your data to third parties';
-  usageBanner.innerHTML = `${usageMeta.dot} This site <strong>${usageText}</strong>`;
-  pillsContainer.appendChild(usageBanner);
-
-  for (const catId of categories) {
-    const meta = CATEGORY_META[catId];
-    if (!meta) continue;
-
-    const pill = document.createElement('div');
-    pill.className = `pill ${usageMeta.cssClass}-pill`;
-    pill.innerHTML = `<span>${meta.icon}</span><span>${meta.label}</span>`;
-    pillsContainer.appendChild(pill);
-
-    const card = document.createElement('div');
-    card.className = `field-detail-inline ${usageMeta.cssClass}-card`;
-
-    const fields = fieldDetails.filter(f => f.category === catId);
-    const fieldsHtml = fields.length === 0
-      ? `<li><span class="field-type-badge">\u2014</span><span>Fields detected (labels not available)</span></li>`
-      : fields.map(f =>
-          `<li><span class="field-type-badge">${f.type}</span><span>${f.label}</span></li>`
-        ).join('');
-
-    card.innerHTML = `
-      <p class="field-detail-desc">${meta.usedFor}</p>
-      <ul class="field-list">${fieldsHtml}</ul>
-    `;
-    pillsContainer.appendChild(card);
-  }
-}
-
-function renderReasons(reasons: string[]) {
-  const list = el('reason-list');
-  list.innerHTML = '';
-  for (const reason of reasons) {
-    const li = document.createElement('li');
-    li.textContent = reason;
-    list.appendChild(li);
-  }
-}
+// ─── Render: Breach history ───────────────────────────────────────────────────
 
 function renderBreachItem(breach: HIBPBreach): HTMLDivElement {
   const div = document.createElement('div');
   div.className = 'breach-item';
-
   const classes = (breach.DataClasses || []).slice(0, 5);
   const classesHtml = classes.map(c => `<span class="breach-class-tag">${c}</span>`).join('');
-
   div.innerHTML = `
     <div class="breach-item-header">
       <span class="breach-name">${breach.Name || breach.Domain || 'Unknown'}</span>
       <span class="breach-date">${formatDate(breach.BreachDate)}</span>
     </div>
-    <div class="breach-accounts">
-      ${breach.PwnCount ? `${formatNumber(breach.PwnCount)} accounts affected` : ''}
-    </div>
+    <div class="breach-accounts">${breach.PwnCount ? `${formatNumber(breach.PwnCount)} accounts affected` : ''}</div>
     <div class="breach-classes">${classesHtml}</div>
   `;
   return div;
@@ -274,10 +119,8 @@ function renderBreaches(domainBreaches: HIBPBreach[], categoryBreaches: HIBPBrea
   const domainList = el('domain-breach-list');
   domainList.innerHTML = '';
   if (domainBreaches.length === 0) {
-    domainList.innerHTML = `
-      <p class="no-breach-msg">\u2713 No known breaches in our database</p>
-      <p class="no-breach-caveat">Absence of a record doesn't guarantee this site has never been breached.</p>
-    `;
+    domainList.innerHTML = `<p class="no-breach-msg">\u2713 No known breaches in our database</p>
+      <p class="no-breach-caveat">Absence of a record doesn't guarantee this site has never been breached.</p>`;
   } else {
     domainBreaches.slice(0, 5).forEach(b => domainList.appendChild(renderBreachItem(b)));
   }
@@ -300,15 +143,15 @@ function renderBreaches(domainBreaches: HIBPBreach[], categoryBreaches: HIBPBrea
   });
 }
 
+// ─── Render: Opt-out ──────────────────────────────────────────────────────────
+
 function renderOptOut(domain: string) {
   const container = el('optout-content');
   container.innerHTML = '';
   const entry = findOptOut(domain);
 
   if (entry) {
-    const difficultyClass = entry.difficulty || 'medium';
     const difficultyLabel: Record<string, string> = { easy: '\u26A1 Easy', medium: '\u23F1 Medium', hard: '\u{1F527} Hard' };
-
     const altItems = (entry.alternatives || []).map(a => {
       if (typeof a === 'string') return `<li>${a}</li>`;
       return `<li><a href="${(a as OptOutAlternative).url}" target="_blank" rel="noopener noreferrer" class="alt-link">${(a as OptOutAlternative).text} \u2197</a></li>`;
@@ -316,336 +159,393 @@ function renderOptOut(domain: string) {
 
     container.innerHTML = `
       <div class="optout-cta">
-        <a href="${entry.opt_out_url}" target="_blank" rel="noopener noreferrer" class="optout-btn">
-          Go to opt-out page \u2197
-        </a>
+        <a href="${entry.opt_out_url}" target="_blank" rel="noopener noreferrer" class="optout-btn">Go to opt-out page \u2197</a>
         <div class="optout-meta">
-          <span class="difficulty-badge ${difficultyClass}">${difficultyLabel[difficultyClass] || difficultyClass}</span>
+          <span class="difficulty-badge ${entry.difficulty}">${difficultyLabel[entry.difficulty] || entry.difficulty}</span>
           <span class="optout-time">\u23F0 ${entry.estimated_time}</span>
         </div>
         ${entry.notes ? `<p class="optout-notes">${entry.notes}</p>` : ''}
-        ${altItems ? `
-          <button class="alternatives-toggle" aria-expanded="false">
-            <span class="toggle-arrow">\u25B6</span>
-            Alternative paths
-          </button>
-          <ul class="alternatives-list hidden">${altItems}</ul>
-        ` : ''}
-      </div>
-    `;
+        ${altItems ? `<button class="alternatives-toggle" aria-expanded="false"><span class="toggle-arrow">\u25B6</span> Alternative paths</button><ul class="alternatives-list hidden">${altItems}</ul>` : ''}
+      </div>`;
 
-    const toggle = container.querySelector('.alternatives-toggle');
-    if (toggle) {
-      toggle.addEventListener('click', () => {
-        const list = container.querySelector('.alternatives-list')!;
-        const arrow = toggle.querySelector('.toggle-arrow')!;
-        const isOpen = !list.classList.contains('hidden');
-        list.classList.toggle('hidden', isOpen);
-        arrow.classList.toggle('open', !isOpen);
-        toggle.setAttribute('aria-expanded', String(!isOpen));
-      });
-    }
+    container.querySelector('.alternatives-toggle')?.addEventListener('click', function(this: HTMLElement) {
+      const list = container.querySelector('.alternatives-list')!;
+      const arrow = this.querySelector('.toggle-arrow')!;
+      const isOpen = !list.classList.contains('hidden');
+      list.classList.toggle('hidden', isOpen);
+      arrow.classList.toggle('open', !isOpen);
+      this.setAttribute('aria-expanded', String(!isOpen));
+    });
   } else {
-    container.innerHTML = `
-      <div class="generic-optout">
-        <p>No specific opt-out info found for <strong>${domain}</strong>. Try these steps:</p>
-        <ol>
-          <li>Look for "Privacy", "Account", or "Data" in the site footer.</li>
-          <li>Search <em>"${domain} delete account"</em> on Google.</li>
-          <li>If you're in the EU or California, email the site requesting data deletion under GDPR/CCPA.</li>
-          <li>Block the domain via DNS (NextDNS, Pi-hole) or use a masked email forwarder.</li>
-        </ol>
-      </div>
-    `;
+    container.innerHTML = `<div class="generic-optout">
+      <p>No specific opt-out info found for <strong>${domain}</strong>. Try these steps:</p>
+      <ol><li>Look for "Privacy" or "Account" in the site footer.</li>
+      <li>Search <em>"${domain} delete account"</em>.</li>
+      <li>If you're in the EU or California, request data deletion under GDPR/CCPA.</li></ol></div>`;
   }
 }
 
-function renderScanTime() {
-  el('scan-time').textContent = `Scanned ${new Date().toLocaleTimeString()}`;
-}
 
+// ─── Render: Privacy Policy Analysis ──────────────────────────────────────────
 
-// ─── Jurisdiction / Privacy Rights section (Req 5) ────────────────────────────
-
-async function renderJurisdictionRights() {
-  const container = el('rights-content');
-  if (!container) return;
-
-  const result = await chrome.storage.local.get(['dg_user_jurisdiction']);
-  const userJurisdictions: JurisdictionId[] = result.dg_user_jurisdiction || [];
-
-  if (userJurisdictions.length === 0) {
-    container.innerHTML = `
-      <div class="jurisdiction-setup">
-        <p>Set your location to see which privacy laws protect you.</p>
-        <button id="setup-jurisdiction-btn" class="optout-btn" style="margin-top: 8px;">Set Up Jurisdiction</button>
-      </div>
-    `;
-    const setupBtn = document.getElementById('setup-jurisdiction-btn');
-    if (setupBtn) {
-      setupBtn.addEventListener('click', () => {
-        chrome.runtime.openOptionsPage();
-      });
-    }
-    return;
-  }
-
-  // Load jurisdiction data inline (avoid import in popup context)
-  const JURISDICTION_NAMES: Record<string, string> = {
-    GDPR: 'GDPR (EU)', CCPA: 'CCPA (California)', CPRA: 'CPRA (California)',
-    VCDPA: 'VCDPA (Virginia)', CPA: 'CPA (Colorado)', CTDPA: 'CTDPA (Connecticut)',
-  };
-
-  const JURISDICTION_RIGHTS: Record<string, { name: string; description: string }[]> = {
-    GDPR: [
-      { name: 'Right of Access', description: 'Ask what data they have about you and get a copy.' },
-      { name: 'Right to Erasure', description: 'Ask them to delete your personal data.' },
-      { name: 'Right to Object', description: 'Tell them to stop using your data for marketing.' },
-      { name: 'Right to Data Portability', description: 'Get your data in a format you can move.' },
-    ],
-    CCPA: [
-      { name: 'Right to Know', description: 'Ask what personal info they collect and why.' },
-      { name: 'Right to Delete', description: 'Ask them to delete your personal info.' },
-      { name: 'Right to Opt-Out of Sale', description: 'Tell them to stop selling your data.' },
-    ],
-    CPRA: [
-      { name: 'Right to Correct', description: 'Ask them to fix inaccurate data.' },
-      { name: 'Right to Limit Sensitive Data', description: 'Limit use of sensitive personal info.' },
-    ],
-    VCDPA: [
-      { name: 'Right to Access', description: 'Confirm and get a copy of your data.' },
-      { name: 'Right to Delete', description: 'Ask them to delete your data.' },
-      { name: 'Right to Opt-Out', description: 'Opt out of targeted ads and data sale.' },
-    ],
-    CPA: [
-      { name: 'Right to Access', description: 'Confirm and get a copy of your data.' },
-      { name: 'Right to Delete', description: 'Ask them to delete your data.' },
-      { name: 'Right to Opt-Out', description: 'Opt out of targeted ads and data sale.' },
-    ],
-    CTDPA: [
-      { name: 'Right to Access', description: 'Confirm and get a copy of your data.' },
-      { name: 'Right to Delete', description: 'Ask them to delete your data.' },
-      { name: 'Right to Opt-Out', description: 'Opt out of targeted ads and data sale.' },
-    ],
-  };
-
-  let html = '';
-  for (const jId of userJurisdictions) {
-    const name = JURISDICTION_NAMES[jId] || jId;
-    const rights = JURISDICTION_RIGHTS[jId] || [];
-    html += `<div class="jurisdiction-block">
-      <div class="jurisdiction-name">\u{1F3DB}\uFE0F ${name}</div>
-      <ul class="rights-list">`;
-    for (const right of rights) {
-      html += `<li><strong>${right.name}</strong>: ${right.description}</li>`;
-    }
-    html += `</ul></div>`;
-  }
-
-  container.innerHTML = html;
-}
-
-// ─── Policy Analysis trigger from popup ───────────────────────────────────────
-
-function renderAnalyzeSection(policyUrl: string | null) {
+async function renderAnalyzeSection(policyUrl: string | null, domain: string) {
   const container = el('analyze-content');
   if (!container) return;
 
+  dbg(`renderAnalyzeSection: domain=${domain}, policyUrl=${policyUrl ? 'yes' : 'no'}`);
+
+  // Try multiple storage keys to find analysis results
+  const storageKey = `analysis_${domain}`;
+  const stored = await chrome.storage.local.get([storageKey, 'lastAnalysis', 'lastAnalysisError']);
+
+  dbg(`Storage keys checked: ${storageKey}, lastAnalysis, lastAnalysisError`);
+  dbg(`Found analysis_domain: ${!!stored[storageKey]}`);
+  dbg(`Found lastAnalysis: ${!!stored.lastAnalysis}`);
+  dbg(`Found lastAnalysisError: ${!!stored.lastAnalysisError}`);
+
+  // Use domain-specific results first, then fall back to lastAnalysis
+  let analysis = stored[storageKey];
+  if (!analysis && stored.lastAnalysis) {
+    // Check if lastAnalysis is for a related domain
+    const lastDomain = stored.lastAnalysis.targetDomain || '';
+    if (lastDomain.includes(domain) || domain.includes(lastDomain) || lastDomain === domain) {
+      analysis = stored.lastAnalysis;
+      dbg(`Using lastAnalysis (domain match: ${lastDomain})`);
+    } else {
+      dbg(`lastAnalysis domain mismatch: ${lastDomain} vs ${domain}`);
+    }
+  }
+
+  if (analysis && analysis.dataTypes) {
+    dbg(`Rendering analysis: ${analysis.dataTypes.length} data types, grid: ${analysis.dataCategoryGrid?.length || 0}`);
+    renderAnalysisResults(container, analysis);
+    renderDebugLog();
+    return;
+  }
+
+  // Check for error
+  if (stored.lastAnalysisError) {
+    dbg(`Last error: ${stored.lastAnalysisError.message}`);
+    container.innerHTML = `
+      <div style="padding: 8px; background: var(--risk-high-bg); border-radius: var(--radius-sm); margin-bottom: 8px;">
+        <p style="font-size: 12px; color: var(--risk-high); font-weight: 600;">\u274C ${stored.lastAnalysisError.message || 'Analysis failed'}</p>
+      </div>
+      ${policyUrl ? `<button id="analyze-policy-btn" class="optout-btn">\u{1F916} Retry Analysis</button>` : ''}
+      <div id="analyze-status" style="display: none; margin-top: 8px; font-size: 12px;"></div>`;
+    wireAnalyzeButton(policyUrl, domain);
+    renderDebugLog();
+    return;
+  }
+
+  // No results yet — show analyze button
   if (policyUrl) {
+    dbg('No analysis yet, showing analyze button');
     container.innerHTML = `
       <div class="analyze-cta">
         <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
           Found a privacy policy link. Analyze it with AI to get a plain-language summary.
         </p>
-        <button id="analyze-policy-btn" class="optout-btn">
-          \u{1F916} Analyze Privacy Policy
-        </button>
+        <button id="analyze-policy-btn" class="optout-btn">\u{1F916} Analyze Privacy Policy</button>
         <div id="analyze-status" style="display: none; margin-top: 8px; font-size: 12px;"></div>
-      </div>
-    `;
-    const analyzeBtn = document.getElementById('analyze-policy-btn');
-    if (analyzeBtn) {
-      analyzeBtn.addEventListener('click', async () => {
-        analyzeBtn.textContent = 'Analyzing...';
-        (analyzeBtn as HTMLButtonElement).disabled = true;
-        const statusDiv = document.getElementById('analyze-status')!;
-        statusDiv.style.display = 'block';
-        statusDiv.textContent = 'Sending to AI engine...';
-        statusDiv.style.color = 'var(--text-muted)';
+      </div>`;
+    wireAnalyzeButton(policyUrl, domain);
+  } else {
+    dbg('No policy URL found on page');
+    container.innerHTML = `<div class="generic-optout"><p>No privacy policy link detected on this page.</p></div>`;
+  }
+  renderDebugLog();
+}
 
-        try {
-          const response = await chrome.runtime.sendMessage({
-            type: 'INITIATE_ANALYSIS',
-            payload: { policyUrl },
-          });
-          if (response && response.success) {
-            statusDiv.textContent = '\u2713 Analysis complete! Check the page overlay for results.';
-            statusDiv.style.color = 'var(--risk-low)';
-          } else {
-            statusDiv.textContent = `Analysis failed: ${response?.error?.message || 'Unknown error'}`;
-            statusDiv.style.color = 'var(--risk-high)';
-            analyzeBtn.textContent = '\u{1F916} Retry Analysis';
-            (analyzeBtn as HTMLButtonElement).disabled = false;
-          }
-        } catch (err) {
-          statusDiv.textContent = `Error: ${(err as Error).message}`;
-          statusDiv.style.color = 'var(--risk-high)';
-          analyzeBtn.textContent = '\u{1F916} Retry Analysis';
-          (analyzeBtn as HTMLButtonElement).disabled = false;
-        }
+function wireAnalyzeButton(policyUrl: string | null, domain: string) {
+  if (!policyUrl) return;
+  const btn = document.getElementById('analyze-policy-btn');
+  if (!btn) return;
+
+  btn.addEventListener('click', async () => {
+    btn.textContent = 'Analyzing\u2026';
+    (btn as HTMLButtonElement).disabled = true;
+    const statusDiv = document.getElementById('analyze-status')!;
+    statusDiv.style.display = 'block';
+    statusDiv.textContent = 'Sending to AI engine\u2026';
+    statusDiv.style.color = 'var(--text-muted)';
+
+    await chrome.storage.local.remove('lastAnalysisError');
+    dbg(`Starting analysis for: ${policyUrl}`);
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'INITIATE_ANALYSIS',
+        payload: { policyUrl },
       });
+
+      dbg(`Analysis response: success=${response?.success}, hasAnalysis=${!!response?.analysis}`);
+
+      if (response && response.success && response.analysis) {
+        // Store it ourselves too, keyed by the popup's domain
+        const storageKey = `analysis_${domain}`;
+        await chrome.storage.local.set({ [storageKey]: response.analysis, lastAnalysis: response.analysis });
+        dbg('Stored analysis, re-rendering');
+        renderAnalyzeSection(policyUrl, domain);
+      } else if (response && response.success) {
+        // Background stored it but didn't return it inline — re-read from storage
+        dbg('Success but no inline analysis, re-reading from storage');
+        setTimeout(() => renderAnalyzeSection(policyUrl, domain), 300);
+      } else {
+        const errMsg = response?.error?.message || response?.error || 'Unknown error';
+        dbg(`Analysis failed: ${errMsg}`);
+        statusDiv.textContent = `Analysis failed: ${errMsg}`;
+        statusDiv.style.color = 'var(--risk-high)';
+        btn.textContent = '\u{1F916} Retry Analysis';
+        (btn as HTMLButtonElement).disabled = false;
+      }
+    } catch (err) {
+      const errMsg = (err as Error).message;
+      dbg(`Analysis exception: ${errMsg}`);
+      statusDiv.textContent = `Error: ${errMsg}`;
+      statusDiv.style.color = 'var(--risk-high)';
+      btn.textContent = '\u{1F916} Retry Analysis';
+      (btn as HTMLButtonElement).disabled = false;
+    }
+    renderDebugLog();
+  });
+}
+
+function renderAnalysisResults(container: HTMLElement, analysis: any) {
+  const riskColors: Record<string, string> = { low: 'var(--risk-low)', medium: 'var(--risk-med)', high: 'var(--risk-high)' };
+
+  let html = `<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+    <span style="font-size: 16px;">\u{1F916}</span>
+    <span style="font-weight: 600; font-size: 13px;">Overall Risk:</span>
+    <span class="risk-badge ${analysis.overallRiskLevel}" style="font-size: 11px; padding: 3px 8px;">${(analysis.overallRiskLevel || 'unknown').toUpperCase()}</span>
+  </div>`;
+
+  // Data Collection Category Grid
+  if (analysis.dataCategoryGrid && analysis.dataCategoryGrid.length > 0) {
+    const gridMeta: Record<string, { bg: string; color: string; dot: string }> = {
+      grey:   { bg: 'var(--bg-section)', color: 'var(--text-muted)', dot: '\u26AA' },
+      blue:   { bg: '#EFF6FF', color: '#1D4ED8', dot: '\u{1F535}' },
+      yellow: { bg: '#FFFBEB', color: '#92400E', dot: '\u{1F7E1}' },
+      red:    { bg: '#FEF2F2', color: '#991B1B', dot: '\u{1F534}' },
+    };
+    html += `<div class="usage-legend" style="margin-bottom: 8px;">
+      <span class="legend-title">Data collection:</span>
+      <span class="legend-item" style="background: var(--bg-section); color: var(--text-muted);">\u26AA Not collected</span>
+      <span class="legend-item usage-collected">\u{1F535} Collected</span>
+      <span class="legend-item usage-shared">\u{1F7E1} Shared</span>
+      <span class="legend-item usage-sold">\u{1F534} Sold</span>
+    </div>`;
+    html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 10px;">';
+    for (const item of analysis.dataCategoryGrid) {
+      const gm = gridMeta[item.collectionStatus] || gridMeta.grey;
+      html += `<div style="padding: 5px 8px; background: ${gm.bg}; color: ${gm.color}; border-radius: var(--radius-sm); font-size: 11px; font-weight: 500;">${gm.dot} ${item.category}</div>`;
+    }
+    html += '</div>';
+  }
+
+  // Data types detail
+  if (analysis.dataTypes && analysis.dataTypes.length > 0) {
+    for (const dt of analysis.dataTypes) {
+      const dtColor = riskColors[dt.riskLevel] || 'var(--text-secondary)';
+      html += `<div style="margin-bottom: 6px; padding: 8px 10px; background: var(--bg-section); border: 1px solid var(--border); border-left: 3px solid ${dtColor}; border-radius: var(--radius-sm);">
+        <div style="font-weight: 600; font-size: 12px;">${dt.dataType} <span style="color: ${dtColor}; font-size: 10px; text-transform: uppercase; margin-left: 4px;">${dt.riskLevel}</span></div>
+        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">${(dt.purposes || []).slice(0, 2).join(', ')}</div>`;
+      if (dt.sharedWithThirdParties) html += `<div style="font-size: 10px; color: var(--risk-high); margin-top: 2px;">\u26A0 Shared with third parties</div>`;
+      if (dt.warningNote) html += `<div style="font-size: 10px; color: var(--risk-med); margin-top: 2px;">\u26A0 ${dt.warningNote}</div>`;
+      if (dt.optOutGuidance) {
+        const g = dt.optOutGuidance;
+        if (g.status === 'available') {
+          html += `<div style="font-size: 10px; color: var(--risk-low); margin-top: 3px; font-weight: 600;">\u2705 Opt-out available</div>`;
+          for (const m of g.mechanisms || []) {
+            if (m.type === 'settings_url' || m.type === 'web_form') html += `<div style="font-size: 10px; margin-top: 2px;">\u{1F517} <a href="${m.value}" target="_blank" rel="noopener" style="color: #2563EB;">${m.value}</a></div>`;
+            else if (m.type === 'email') html += `<div style="font-size: 10px; margin-top: 2px;">\u2709\uFE0F <a href="mailto:${m.value}" style="color: #2563EB;">${m.value}</a></div>`;
+            if (m.instructionText) html += `<div style="font-size: 10px; color: var(--text-muted); font-style: italic; margin-top: 1px;">${m.instructionText}</div>`;
+          }
+        } else if (g.status === 'vague') {
+          html += `<div style="font-size: 10px; color: var(--risk-med); margin-top: 3px;">\u26A0\uFE0F Vague opt-out language: ${g.summary || ''}</div>`;
+        } else {
+          html += `<div style="font-size: 10px; color: var(--text-muted); margin-top: 3px;">\u274C No opt-out found</div>`;
+        }
+      }
+      html += '</div>';
     }
   } else {
-    container.innerHTML = `
-      <div class="generic-optout">
-        <p>No privacy policy link detected on this page.</p>
-        <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
-          You can paste policy text manually via the settings page.
-        </p>
-      </div>
-    `;
+    html += '<div style="font-size: 12px; color: var(--text-muted); font-style: italic;">No personal data collection detected in the policy.</div>';
   }
+
+  if (analysis.analysisWarnings?.length > 0) {
+    html += '<div style="margin-top: 6px;">';
+    for (const w of analysis.analysisWarnings) html += `<div style="font-size: 10px; color: var(--text-muted);">\u26A0 ${w}</div>`;
+    html += '</div>';
+  }
+
+  html += `<div style="font-size: 10px; color: var(--text-muted); margin-top: 6px;">Model: ${analysis.modelUsed || 'unknown'} \u00B7 ${analysis.analyzedAt ? formatDate(analysis.analyzedAt) : ''}</div>`;
+
+  container.innerHTML = html;
 }
 
-// ─── Bookmark feature ─────────────────────────────────────────────────────────
+
+// ─── Render: Jurisdiction Rights ──────────────────────────────────────────────
+
+async function renderJurisdictionRights() {
+  const container = el('rights-content');
+  if (!container) return;
+  const result = await chrome.storage.local.get(['dg_user_jurisdiction']);
+  const userJurisdictions: JurisdictionId[] = result.dg_user_jurisdiction || [];
+
+  if (userJurisdictions.length === 0) {
+    container.innerHTML = `<div class="jurisdiction-setup"><p>Set your location to see which privacy laws protect you.</p>
+      <button id="setup-jurisdiction-btn" class="optout-btn" style="margin-top: 8px;">Set Up Jurisdiction</button></div>`;
+    document.getElementById('setup-jurisdiction-btn')?.addEventListener('click', () => chrome.runtime.openOptionsPage());
+    return;
+  }
+
+  const RIGHTS: Record<string, { name: string; rights: { name: string; desc: string }[] }> = {
+    GDPR: { name: 'GDPR (EU)', rights: [
+      { name: 'Right of Access', desc: 'Ask what data they have about you.' },
+      { name: 'Right to Erasure', desc: 'Ask them to delete your data.' },
+      { name: 'Right to Object', desc: 'Stop them using your data for marketing.' },
+    ]},
+    CCPA: { name: 'CCPA (California)', rights: [
+      { name: 'Right to Know', desc: 'Ask what info they collect and why.' },
+      { name: 'Right to Delete', desc: 'Ask them to delete your info.' },
+      { name: 'Right to Opt-Out of Sale', desc: 'Stop them selling your data.' },
+    ]},
+    CPRA: { name: 'CPRA (California)', rights: [
+      { name: 'Right to Correct', desc: 'Fix inaccurate data.' },
+      { name: 'Right to Limit Sensitive Data', desc: 'Limit use of sensitive info.' },
+    ]},
+    VCDPA: { name: 'VCDPA (Virginia)', rights: [{ name: 'Right to Access & Delete', desc: 'Get and delete your data.' }, { name: 'Right to Opt-Out', desc: 'Opt out of ads and data sale.' }]},
+    CPA: { name: 'CPA (Colorado)', rights: [{ name: 'Right to Access & Delete', desc: 'Get and delete your data.' }, { name: 'Right to Opt-Out', desc: 'Opt out of ads and data sale.' }]},
+    CTDPA: { name: 'CTDPA (Connecticut)', rights: [{ name: 'Right to Access & Delete', desc: 'Get and delete your data.' }, { name: 'Right to Opt-Out', desc: 'Opt out of ads and data sale.' }]},
+  };
+
+  let html = '';
+  for (const jId of userJurisdictions) {
+    const j = RIGHTS[jId];
+    if (!j) continue;
+    html += `<div class="jurisdiction-block"><div class="jurisdiction-name">\u{1F3DB}\uFE0F ${j.name}</div><ul class="rights-list">`;
+    for (const r of j.rights) html += `<li><strong>${r.name}</strong>: ${r.desc}</li>`;
+    html += `</ul></div>`;
+  }
+  container.innerHTML = html;
+}
+
+// ─── Bookmark ─────────────────────────────────────────────────────────────────
 
 const BOOKMARKS_KEY = 'dg_bookmarked_sites';
-
-async function getBookmarks(): Promise<Record<string, any>> {
-  return new Promise(resolve => {
-    chrome.storage.local.get([BOOKMARKS_KEY], result => {
-      resolve(result[BOOKMARKS_KEY] || {});
-    });
-  });
-}
-
-async function saveBookmarks(bookmarks: Record<string, any>) {
-  return new Promise<void>(resolve => {
-    chrome.storage.local.set({ [BOOKMARKS_KEY]: bookmarks }, resolve);
-  });
-}
 
 async function initBookmarkBtn(domain: string) {
   const btn = document.getElementById('bookmark-btn');
   if (!btn) return;
-
-  const bookmarks = await getBookmarks();
-  const isBookmarked = !!bookmarks[domain];
+  const bookmarks = await new Promise<Record<string, any>>(r => chrome.storage.local.get([BOOKMARKS_KEY], res => r(res[BOOKMARKS_KEY] || {})));
+  let isBookmarked = !!bookmarks[domain];
   updateBookmarkBtn(btn, isBookmarked);
 
   btn.addEventListener('click', async () => {
-    const current = await getBookmarks();
-    const nowBookmarked = !!current[domain];
-
-    if (nowBookmarked) {
-      delete current[domain];
-    } else {
-      current[domain] = { addedAt: new Date().toISOString(), lastChecked: null };
-    }
-
-    await saveBookmarks(current);
-    updateBookmarkBtn(btn, !nowBookmarked);
-
-    const prev = btn.textContent;
-    btn.textContent = nowBookmarked ? '\u2713 Removed' : '\u2713 Bookmarked!';
-    (btn as HTMLButtonElement).disabled = true;
-    setTimeout(() => {
-      updateBookmarkBtn(btn, !nowBookmarked);
-      (btn as HTMLButtonElement).disabled = false;
-    }, 1200);
+    const current = await new Promise<Record<string, any>>(r => chrome.storage.local.get([BOOKMARKS_KEY], res => r(res[BOOKMARKS_KEY] || {})));
+    if (current[domain]) { delete current[domain]; isBookmarked = false; }
+    else { current[domain] = { addedAt: new Date().toISOString(), lastChecked: null }; isBookmarked = true; }
+    await new Promise<void>(r => chrome.storage.local.set({ [BOOKMARKS_KEY]: current }, r));
+    updateBookmarkBtn(btn, isBookmarked);
   });
 }
 
 function updateBookmarkBtn(btn: HTMLElement, isBookmarked: boolean) {
-  if (isBookmarked) {
-    btn.textContent = '\u{1F516} Bookmarked';
-    btn.classList.add('bookmarked');
-  } else {
-    btn.textContent = '\u{1F516} Bookmark';
-    btn.classList.remove('bookmarked');
-  }
+  btn.textContent = isBookmarked ? '\u{1F516} Bookmarked' : '\u{1F516} Bookmark';
+  btn.classList.toggle('bookmarked', isBookmarked);
 }
 
-// ─── Main flow ────────────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function init() {
+  dbg('Popup init started');
   await loadOptOutDb();
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
   if (!tab || !tab.id || !tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('about:') || tab.url.startsWith('chrome-extension://')) {
     hide('loading');
     show('error-screen');
+    dbg('Cannot scan this page type');
+    renderDebugLog();
     return;
   }
 
-  // Step 1: Get page data from content script
+  dbg(`Tab: ${tab.url}`);
+
+  // Get page data from content script
   let pageData: PageScanResult;
   try {
     const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_DATA' });
-    if (!response || !response.success) throw new Error(response?.error || 'No response from content script');
+    if (!response || !response.success) throw new Error(response?.error || 'No response');
     pageData = response.data;
+    dbg(`Page scan: domain=${pageData.domain}, policyUrl=${pageData.policyUrl ? 'yes' : 'no'}`);
   } catch (err) {
     try {
+      dbg('Content script not ready, injecting...');
       await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content_script.js'] });
       const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PAGE_DATA' });
       if (!response || !response.success) throw new Error(response?.error || 'Injection failed');
       pageData = response.data;
+      dbg(`Page scan (after inject): domain=${pageData.domain}`);
     } catch (err2) {
       hide('loading');
       el('error-message').textContent = 'Unable to scan this page.';
       show('error-screen');
+      dbg(`Scan failed: ${(err2 as Error).message}`);
+      renderDebugLog();
       return;
     }
   }
 
-  // Step 2: Get breach data from background
+  // Get breach data
   let domainBreaches: HIBPBreach[] = [];
   let categoryBreaches: HIBPBreach[] = [];
   try {
     const breachResponse = await chrome.runtime.sendMessage({
-      type: 'GET_BREACH_DATA',
-      domain: pageData.domain,
-      categories: pageData.categories,
+      type: 'GET_BREACH_DATA', domain: pageData.domain, categories: pageData.categories,
     });
-    if (breachResponse && breachResponse.success) {
+    if (breachResponse?.success) {
       domainBreaches = breachResponse.domainBreaches || [];
       categoryBreaches = breachResponse.categoryBreaches || [];
+      dbg(`Breaches: ${domainBreaches.length} domain, ${categoryBreaches.length} category`);
     }
-  } catch (_) {
-    // Breach data unavailable
-  }
+  } catch (_) { dbg('Breach data unavailable'); }
 
-  // Step 3: Compute risk
-  const { level, reasons } = computeRisk({
-    categories: pageData.categories,
-    breaches: domainBreaches,
-    hasHttps: pageData.hasHttps,
-    policyUrl: pageData.policyUrl,
+  // Determine risk level from breaches
+  const hasRecentBreach = domainBreaches.some(b => {
+    const fiveYearsAgo = new Date(); fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+    return new Date(b.BreachDate) >= fiveYearsAgo;
   });
+  const riskLevel: RiskLevel = hasRecentBreach ? 'high' : domainBreaches.length > 0 ? 'medium' : 'low';
 
-  // Step 4: Render
+  // Render
   hide('loading');
   show('main');
 
   renderHeader(pageData);
-  renderRiskBadge(level);
-  const optOutEntry = findOptOut(pageData.domain);
-  const dataUsage = optOutEntry ? (optOutEntry.data_usage || 'unknown') : 'unknown';
-  renderCategories(pageData.categories, pageData.fieldDetails || [], dataUsage);
-  renderReasons(reasons);
+  renderRiskBadge(riskLevel);
+  renderAnalyzeSection(pageData.policyUrl, pageData.domain);
   renderBreaches(domainBreaches, categoryBreaches);
   renderOptOut(pageData.domain);
-  renderAnalyzeSection(pageData.policyUrl);
   renderJurisdictionRights();
-  renderScanTime();
+  el('scan-time').textContent = `Scanned ${new Date().toLocaleTimeString()}`;
   initBookmarkBtn(pageData.domain);
+
+  // Debug toggle
+  document.getElementById('toggle-debug')?.addEventListener('click', () => {
+    const logEl = el('debug-log');
+    logEl.classList.toggle('hidden');
+    renderDebugLog();
+  });
 
   // Settings link
   document.getElementById('settings-link')?.addEventListener('click', (e) => {
     e.preventDefault();
     chrome.runtime.openOptionsPage();
   });
+
+  dbg('Popup render complete');
+  renderDebugLog();
 }
 
 init();

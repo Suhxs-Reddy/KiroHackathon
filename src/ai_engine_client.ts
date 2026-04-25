@@ -157,7 +157,7 @@ export class SaulLMAdapter implements LLMAdapter {
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userMessage },
           ],
-          max_tokens: 2000,
+          max_tokens: 3000,
           temperature: 0.3,
           stream: false,
         }),
@@ -195,6 +195,22 @@ export class SaulLMAdapter implements LLMAdapter {
             true,
             false,
             `HTTP ${response.status}. Body: ${errorBody.substring(0, 200)}`
+          );
+        }
+        if (response.status === 400) {
+          // 400 usually means the input is too long or the request is malformed
+          const isTooLong = errorBody.toLowerCase().includes('too long') ||
+                            errorBody.toLowerCase().includes('token') ||
+                            errorBody.toLowerCase().includes('length') ||
+                            errorBody.toLowerCase().includes('context');
+          throw new AnalysisError(
+            'AI_UNAVAILABLE',
+            isTooLong
+              ? 'The policy text is too long for this model. Try a shorter policy or switch to OpenAI GPT-4o in Settings.'
+              : `The AI service rejected the request. ${errorBody.substring(0, 100)}`,
+            true,
+            true,
+            `HTTP 400. Body: ${errorBody.substring(0, 300)}`
           );
         }
         if (response.status >= 500) {
@@ -479,6 +495,26 @@ function computeOverallRiskLevel(dataTypes: Risk_Analysis['dataTypes']): RiskLev
   return maxLevel;
 }
 
+/**
+ * Extract JSON from LLM response text. Models often wrap JSON in markdown
+ * code fences or add explanatory text before/after the JSON object.
+ */
+function extractJsonFromResponse(text: string): string {
+  // Try to find JSON in markdown code fences
+  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (fenceMatch) return fenceMatch[1].trim();
+
+  // Try to find a JSON object by matching outermost braces
+  const braceStart = text.indexOf('{');
+  const braceEnd = text.lastIndexOf('}');
+  if (braceStart !== -1 && braceEnd > braceStart) {
+    return text.substring(braceStart, braceEnd + 1);
+  }
+
+  // Return as-is and let JSON.parse handle the error
+  return text.trim();
+}
+
 async function parseAndValidateResponse(
   responseText: string,
   adapter: LLMAdapter,
@@ -486,25 +522,55 @@ async function parseAndValidateResponse(
   userMessage: string,
   retryCount: number = 0
 ): Promise<{ dataTypes: Risk_Analysis['dataTypes']; analysisWarnings: string[]; dataCategoryGrid?: Risk_Analysis['dataCategoryGrid'] }> {
+  // Store raw response for debugging
+  await chrome.storage.local.set({
+    'debug_lastRawResponse': responseText.substring(0, 2000),
+    'debug_lastResponseTime': new Date().toISOString(),
+    'debug_retryCount': retryCount,
+  });
+
   try {
-    const parsed = JSON.parse(responseText);
+    const jsonText = extractJsonFromResponse(responseText);
+    console.log('[AI] Extracted JSON length:', jsonText.length);
+
+    const parsed = JSON.parse(jsonText);
 
     const validation = validateRiskAnalysis(parsed);
     if (validation.valid) {
+      console.log('[AI] Validation passed');
+      await chrome.storage.local.set({ 'debug_lastValidationErrors': [] });
       return parsed;
     }
 
-    // Schema validation failed
+    // Schema validation failed — log the errors
+    console.warn('[AI] Validation failed:', validation.errors);
+    await chrome.storage.local.set({
+      'debug_lastValidationErrors': validation.errors,
+    });
+
+    // If we have dataTypes array but some fields are wrong, try to use it anyway
+    // with a relaxed approach (better partial results than no results)
+    if (parsed.dataTypes && Array.isArray(parsed.dataTypes) && parsed.dataTypes.length > 0) {
+      console.log('[AI] Using partial results despite validation errors');
+      return {
+        dataTypes: parsed.dataTypes,
+        analysisWarnings: [
+          ...(parsed.analysisWarnings || []),
+          'Some analysis data may be incomplete (validation warnings: ' + validation.errors.slice(0, 2).join('; ') + ')',
+        ],
+        dataCategoryGrid: parsed.dataCategoryGrid || [],
+      };
+    }
+
     if (retryCount === 0) {
-      // Retry once with correction prompt
-      const correctionPrompt = `${userMessage}\n\nYour previous response was not valid JSON matching the required schema. Please respond with only the JSON object.`;
+      const correctionPrompt = `${userMessage}\n\nYour previous response had validation errors: ${validation.errors.slice(0, 3).join('; ')}. Please respond with ONLY a valid JSON object matching the schema. No markdown, no explanation, just the JSON.`;
       const retryResponse = await adapter.complete(systemPrompt, correctionPrompt);
       return parseAndValidateResponse(retryResponse, adapter, systemPrompt, userMessage, 1);
     }
 
     throw new AnalysisError(
       'AI_INVALID_RESPONSE',
-      'Analysis returned unexpected data. Please retry.',
+      `Analysis data didn't match expected format. Errors: ${validation.errors.slice(0, 2).join('; ')}`,
       true,
       false,
       `Schema validation failed: ${validation.errors.join('; ')}`
@@ -512,19 +578,27 @@ async function parseAndValidateResponse(
   } catch (error) {
     if (error instanceof AnalysisError) throw error;
 
-    // JSON parse error
+    // JSON parse error — log it
+    const parseError = error instanceof Error ? error.message : String(error);
+    console.error('[AI] JSON parse error:', parseError);
+    console.error('[AI] Raw response (first 500 chars):', responseText.substring(0, 500));
+    await chrome.storage.local.set({
+      'debug_lastParseError': parseError,
+      'debug_lastRawSnippet': responseText.substring(0, 500),
+    });
+
     if (retryCount === 0) {
-      const correctionPrompt = `${userMessage}\n\nYour previous response was not valid JSON. Please respond with only the JSON object.`;
+      const correctionPrompt = `${userMessage}\n\nYour previous response was not valid JSON (error: ${parseError}). Please respond with ONLY a valid JSON object. No markdown code fences, no explanation text, just the raw JSON starting with { and ending with }.`;
       const retryResponse = await adapter.complete(systemPrompt, correctionPrompt);
       return parseAndValidateResponse(retryResponse, adapter, systemPrompt, userMessage, 1);
     }
 
     throw new AnalysisError(
       'AI_INVALID_RESPONSE',
-      'Analysis returned unexpected data. Please retry.',
+      `Could not parse AI response as JSON: ${parseError}`,
       true,
       false,
-      error instanceof Error ? error.message : String(error)
+      `Parse error: ${parseError}. Raw start: ${responseText.substring(0, 200)}`
     );
   }
 }
@@ -550,12 +624,16 @@ export async function analyzePolicy(parsed: Parsed_Policy): Promise<Risk_Analysi
     ? new OpenAIAdapter(storage.apiKey)
     : new SaulLMAdapter(storage.apiKey);
 
-  // Build prompts
+  // Apply token budget — account for system prompt + response tokens.
+  // HuggingFace free-tier models have ~8K context. Reserve ~2K for system prompt,
+  // ~2K for response, leaving ~4K for policy text.
+  // OpenAI GPT-4o has 128K context.
   const systemPrompt = buildSystemPrompt();
-  
-  // Apply token budget (28k for SaulLM, 100k for OpenAI)
-  const maxTokens = adapterType === 'openai' ? 100000 : 28000;
-  const { text: fullText, wasTruncated } = truncateText(parsed.fullText, maxTokens);
+  const systemPromptTokens = estimateTokens(systemPrompt);
+  const responseReserve = 2500;
+  const totalBudget = adapterType === 'openai' ? 100000 : 8000;
+  const policyBudget = totalBudget - systemPromptTokens - responseReserve;
+  const { text: fullText, wasTruncated } = truncateText(parsed.fullText, Math.max(policyBudget, 1000));
   
   const targetDomain = new URL(parsed.sourceUrl).hostname;
   const userMessage = buildUserMessage({ ...parsed, fullText }, targetDomain);

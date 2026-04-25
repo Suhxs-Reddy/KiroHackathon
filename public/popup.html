@@ -39,29 +39,16 @@
         </div>
       </header>
 
-      <!-- Section 1: What this site collects -->
-      <section class="section" id="section-collects">
+      <!-- Section 1: Privacy Policy Analysis -->
+      <section class="section" id="section-analyze">
         <h2 class="section-title">
-          <span class="section-icon">&#x1F4CB;</span>
-          What this site collects
+          <span class="section-icon">&#x1F916;</span>
+          Privacy Policy Analysis
         </h2>
-        <div id="no-fields" class="no-fields hidden">
-          <span class="check-icon">&#x2713;</span>
-          No data input fields detected on this page.
-        </div>
-        <div id="category-pills" class="category-pills"></div>
+        <div id="analyze-content"></div>
       </section>
 
-      <!-- Section 2: Why we flagged it -->
-      <section class="section" id="section-reasons">
-        <h2 class="section-title">
-          <span class="section-icon">&#x26A0;&#xFE0F;</span>
-          Why we flagged it
-        </h2>
-        <ul id="reason-list" class="reason-list"></ul>
-      </section>
-
-      <!-- Section 3: Breach history -->
+      <!-- Section 2: Breach history -->
       <section class="section" id="section-breaches">
         <h2 class="section-title">
           <span class="section-icon">&#x1F513;</span>
@@ -79,16 +66,7 @@
         </div>
       </section>
 
-      <!-- Section 4: AI Policy Analysis -->
-      <section class="section" id="section-analyze">
-        <h2 class="section-title">
-          <span class="section-icon">&#x1F916;</span>
-          AI Policy Analysis
-        </h2>
-        <div id="analyze-content"></div>
-      </section>
-
-      <!-- Section 5: How to opt out -->
+      <!-- Section 3: How to opt out -->
       <section class="section" id="section-optout">
         <h2 class="section-title">
           <span class="section-icon">&#x1F6AA;</span>
@@ -97,13 +75,19 @@
         <div id="optout-content"></div>
       </section>
 
-      <!-- Section 6: Your Privacy Rights (Req 5) -->
+      <!-- Section 4: Your Privacy Rights -->
       <section class="section" id="section-rights">
         <h2 class="section-title">
           <span class="section-icon">&#x2696;&#xFE0F;</span>
           Your Privacy Rights
         </h2>
         <div id="rights-content"></div>
+      </section>
+
+      <!-- Debug (collapsed by default) -->
+      <section class="section" id="section-debug" style="border-top: 1px dashed var(--border);">
+        <button id="toggle-debug" style="background: none; border: none; font-size: 11px; color: var(--text-muted); cursor: pointer; padding: 0;">&#x1F41B; Show debug log</button>
+        <pre id="debug-log" class="hidden" style="margin-top: 8px; font-size: 10px; font-family: monospace; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; background: var(--bg-section); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: var(--text-muted);"></pre>
       </section>
 
       <!-- Footer -->

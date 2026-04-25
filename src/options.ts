@@ -192,3 +192,107 @@ function showStatus(div: HTMLDivElement, text: string, type: 'ok' | 'error') {
   div.className = `status ${type}`;
   div.style.display = 'block';
 }
+
+
+// ─── Debug Panel ──────────────────────────────────────────────────────────────
+
+const loadDebugBtn = document.getElementById('load-debug-btn') as HTMLButtonElement;
+const clearDebugBtn = document.getElementById('clear-debug-btn') as HTMLButtonElement;
+const debugOutput = document.getElementById('debug-output') as HTMLPreElement;
+
+loadDebugBtn.addEventListener('click', async () => {
+  debugOutput.style.display = 'block';
+  debugOutput.textContent = 'Loading...\n';
+
+  const keys = [
+    'apiKey', 'adapterType',
+    'debug_lastRawResponse', 'debug_lastResponseTime', 'debug_retryCount',
+    'debug_lastValidationErrors', 'debug_lastParseError', 'debug_lastRawSnippet',
+    'lastAnalysis', 'lastAnalysisError',
+    'dg_user_jurisdiction',
+  ];
+
+  const data = await chrome.storage.local.get(keys);
+
+  let output = '=== DataGuard Debug Info ===\n';
+  output += `Time: ${new Date().toISOString()}\n\n`;
+
+  // AI Config
+  output += '--- AI Configuration ---\n';
+  output += `Adapter: ${data.adapterType || '(not set)'}\n`;
+  output += `API Key: ${data.apiKey ? data.apiKey.substring(0, 8) + '...' + data.apiKey.substring(data.apiKey.length - 4) : '(not set)'}\n\n`;
+
+  // Jurisdiction
+  output += '--- Jurisdiction ---\n';
+  output += `Selected: ${JSON.stringify(data.dg_user_jurisdiction || [])}\n\n`;
+
+  // Last Analysis
+  output += '--- Last Analysis Result ---\n';
+  if (data.lastAnalysis) {
+    const a = data.lastAnalysis;
+    output += `Domain: ${a.targetDomain}\n`;
+    output += `Risk: ${a.overallRiskLevel}\n`;
+    output += `Data types: ${a.dataTypes?.length || 0}\n`;
+    output += `Grid items: ${a.dataCategoryGrid?.length || 0}\n`;
+    output += `Model: ${a.modelUsed}\n`;
+    output += `Analyzed at: ${a.analyzedAt}\n`;
+    output += `Warnings: ${JSON.stringify(a.analysisWarnings)}\n`;
+  } else {
+    output += '(none)\n';
+  }
+  output += '\n';
+
+  // Last Error
+  output += '--- Last Analysis Error ---\n';
+  if (data.lastAnalysisError) {
+    output += JSON.stringify(data.lastAnalysisError, null, 2) + '\n';
+  } else {
+    output += '(none)\n';
+  }
+  output += '\n';
+
+  // Raw AI Response
+  output += '--- Last Raw AI Response ---\n';
+  output += `Time: ${data.debug_lastResponseTime || '(none)'}\n`;
+  output += `Retry count: ${data.debug_retryCount ?? '(none)'}\n`;
+  if (data.debug_lastRawResponse) {
+    output += `Response (first 2000 chars):\n${data.debug_lastRawResponse}\n`;
+  } else {
+    output += '(none)\n';
+  }
+  output += '\n';
+
+  // Validation Errors
+  output += '--- Last Validation Errors ---\n';
+  if (data.debug_lastValidationErrors && data.debug_lastValidationErrors.length > 0) {
+    for (const err of data.debug_lastValidationErrors) {
+      output += `  - ${err}\n`;
+    }
+  } else {
+    output += '(none)\n';
+  }
+  output += '\n';
+
+  // Parse Error
+  output += '--- Last Parse Error ---\n';
+  if (data.debug_lastParseError) {
+    output += `Error: ${data.debug_lastParseError}\n`;
+    output += `Raw snippet: ${data.debug_lastRawSnippet || '(none)'}\n`;
+  } else {
+    output += '(none)\n';
+  }
+
+  debugOutput.textContent = output;
+});
+
+clearDebugBtn.addEventListener('click', async () => {
+  // Clear all analysis caches (keys starting with "analysis_")
+  const all = await chrome.storage.local.get(null);
+  const keysToRemove = Object.keys(all).filter(k =>
+    k.startsWith('analysis_') || k.startsWith('debug_') ||
+    k === 'lastAnalysis' || k === 'lastAnalysisError'
+  );
+  await chrome.storage.local.remove(keysToRemove);
+  debugOutput.style.display = 'block';
+  debugOutput.textContent = `Cleared ${keysToRemove.length} cached entries:\n${keysToRemove.join('\n')}`;
+});

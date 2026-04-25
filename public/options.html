@@ -145,6 +145,15 @@
     </div>
   </div>
 
+  <!-- Debug Panel -->
+  <div class="section">
+    <h2>&#x1F41B; Debug Log</h2>
+    <p class="section-desc">Diagnostic info for troubleshooting AI analysis issues. Share this with developers if you encounter errors.</p>
+    <button class="btn" id="load-debug-btn">Load Debug Info</button>
+    <button class="btn" id="clear-debug-btn" style="margin-left: 8px;">Clear Analysis Cache</button>
+    <pre id="debug-output" style="margin-top: 12px; padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-size: 11px; font-family: monospace; white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto; display: none; color: var(--text);"></pre>
+  </div>
+
   <footer>DataGuard is open source. No account required. No tracking.</footer>
 
   <script src="options.js"></script>
