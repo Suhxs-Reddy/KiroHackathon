@@ -3,7 +3,7 @@
   "name": "Privacy Tool",
   "version": "0.1.0",
   "description": "Detects privacy policies and identifies data at risk using AI analysis of ToS/privacy policy text.",
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "alarms", "notifications"],
   "background": {
     "service_worker": "dist/background.js",
     "type": "module"

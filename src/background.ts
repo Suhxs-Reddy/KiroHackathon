@@ -9,6 +9,17 @@ import {
 import { fetchDocument, wrapManualText } from './fetcher.js';
 import { parseDocument } from './parser/index.js';
 import { analyzePolicy, testApiKey } from './ai_engine_client.js';
+import { handleAlarmFired } from './reminder_scheduler.js';
+import { saveActionRecord, getActionRecords, clearActionRecords } from './action_tracker.js';
+import { scheduleReminder, cancelReminder, getReminders } from './reminder_scheduler.js';
+
+// ─── Top-level listener registration (Req 5.3, 5.4) ──────────────────────────
+
+chrome.alarms.onAlarm.addListener(handleAlarmFired);
+
+chrome.notifications.onClicked.addListener((notificationId: string) => {
+  chrome.notifications.clear(notificationId);
+});
 
 // ─── Task 7.1: Pipeline Orchestration ─────────────────────────────────────────
 
@@ -49,6 +60,56 @@ chrome.runtime.onMessage.addListener(
 
     if (message.type === 'VALIDATE_API_KEY') {
       handleValidateApiKey(message).then(sendResponse);
+      return true;
+    }
+
+    // ─── Opt-Out Automation Message Handlers ────────────────────────────────
+
+    if (message.type === 'OPEN_TAB') {
+      chrome.tabs.create({ url: message.payload.url });
+      sendResponse({ success: true });
+      return true;
+    }
+
+    if (message.type === 'SAVE_ACTION') {
+      saveActionRecord(message.payload).then(record => {
+        sendResponse({ success: true, record });
+      });
+      return true;
+    }
+
+    if (message.type === 'GET_ACTIONS') {
+      getActionRecords(message.payload.domain).then(records => {
+        sendResponse({ success: true, records });
+      });
+      return true;
+    }
+
+    if (message.type === 'CLEAR_ACTIONS') {
+      clearActionRecords(message.payload.domain).then(() => {
+        sendResponse({ success: true });
+      });
+      return true;
+    }
+
+    if (message.type === 'SCHEDULE_REMINDER') {
+      scheduleReminder(message.payload).then(metadata => {
+        sendResponse({ success: true, metadata });
+      });
+      return true;
+    }
+
+    if (message.type === 'CANCEL_REMINDER') {
+      cancelReminder(message.payload.alarmName).then(() => {
+        sendResponse({ success: true });
+      });
+      return true;
+    }
+
+    if (message.type === 'GET_REMINDERS') {
+      getReminders(message.payload.domain).then(reminders => {
+        sendResponse({ success: true, reminders });
+      });
       return true;
     }
 

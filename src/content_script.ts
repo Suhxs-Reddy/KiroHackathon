@@ -1,4 +1,4 @@
-import type { ExtensionMessage, PolicyLink, Page_Metadata, ShowAlertPopupMessage, Risk_Analysis, AnalysisErrorMessage, OptOutGuidance, OptOutStatus } from './types.js';
+import type { ExtensionMessage, PolicyLink, Page_Metadata, ShowAlertPopupMessage, Risk_Analysis, AnalysisErrorMessage, OptOutGuidance, OptOutStatus, ActionRecord, ReminderMetadata, OptOutMechanismType } from './types.js';
 
 // ─── Task 2.1: Policy Link Detection ─────────────────────────────────────────
 
@@ -222,6 +222,101 @@ function injectAlertPopup(payload: ShowAlertPopupMessage['payload']) {
 
 // ─── Opt-Out Guidance Helpers ──────────────────────────────────────────────────
 
+export function buildMailtoLink(
+  emailAddress: string,
+  domain: string,
+  dataType: string
+): string {
+  const subject = `Data Opt-Out Request — ${domain}`;
+
+  const body = [
+    `Dear ${domain} Privacy Team,`,
+    '',
+    `I am a user of ${domain} and I am writing to request that you opt me out of ` +
+      `the collection and/or sharing of my ${dataType} data.`,
+    '',
+    'I am making this request pursuant to applicable privacy regulations, including ' +
+      'but not limited to the GDPR, CCPA, and other relevant data protection laws.',
+    '',
+    'Please confirm that my request has been processed and provide a timeline ' +
+      'for when the opt-out will take effect.',
+    '',
+    'Thank you for your prompt attention to this matter.',
+    '',
+    'Sincerely,',
+    '[Your Name]',
+  ].join('\n');
+
+  return `mailto:${emailAddress}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+export function buildIcsFile(domain: string, dataType: string, reminderType: string, delayDays: number): string {
+  const now = new Date();
+  const eventDate = new Date(now.getTime() + delayDays * 24 * 60 * 60 * 1000);
+
+  const formatDate = (d: Date): string => {
+    return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  };
+
+  const titles: Record<string, string> = {
+    postal_mail: `Send opt-out letter to ${domain} (${dataType})`,
+    follow_up: `Follow up on opt-out request — ${domain} (${dataType})`,
+    renewal: `Renew opt-out for ${dataType} — ${domain}`,
+  };
+
+  const descriptions: Record<string, string> = {
+    postal_mail: `Reminder to send your opt-out letter for ${dataType} data to ${domain}. Include your name, address, and a clear statement requesting opt-out.`,
+    follow_up: `Check if ${domain} has processed your opt-out request for ${dataType} data. If not, consider following up again.`,
+    renewal: `It may be time to renew your opt-out for ${dataType} data on ${domain}.`,
+  };
+
+  const title = titles[reminderType] || `Privacy opt-out reminder — ${domain}`;
+  const description = descriptions[reminderType] || `Opt-out reminder for ${dataType} on ${domain}`;
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Privacy Tool//Opt-Out Reminder//EN',
+    'BEGIN:VEVENT',
+    `DTSTART:${formatDate(eventDate)}`,
+    `DTEND:${formatDate(new Date(eventDate.getTime() + 30 * 60 * 1000))}`,
+    `SUMMARY:${title}`,
+    `DESCRIPTION:${description.replace(/\n/g, '\\n')}`,
+    'BEGIN:VALARM',
+    'TRIGGER:-PT30M',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${title}`,
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+}
+
+function downloadIcsFile(icsContent: string, filename: string): void {
+  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export function isValidOptOutUrl(url: string): boolean {
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return false;
+  }
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function normalizeOptOutGuidance(analysis: Risk_Analysis): Risk_Analysis {
   return {
     ...analysis,
@@ -270,13 +365,38 @@ function renderOptOutMechanism(mechanism: { type: string; value: string; instruc
   return html;
 }
 
-function renderOptOutSection(guidance: OptOutGuidance): string {
+function renderOptOutSection(
+  guidance: OptOutGuidance,
+  domain: string,
+  dataType: string,
+  actionRecords: ActionRecord[],
+  reminders: ReminderMetadata[]
+): string {
   let html = '<div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #ddd;">';
 
   if (guidance.status === 'available') {
     html += '<div style="font-size: 12px; color: #4CAF50; font-weight: bold;">✅ Opt-out available</div>';
     for (const mechanism of guidance.mechanisms) {
       html += renderOptOutMechanism(mechanism);
+
+      // Task 9.2: Render action buttons for available mechanisms
+      if (mechanism.type === 'settings_url' || mechanism.type === 'web_form') {
+        const btnId = `optout-btn-${dataType}-${mechanism.type}`;
+        html += `<button class="privacy-tool-optout-btn" data-mechanism-type="${mechanism.type}" data-mechanism-url="${mechanism.value}" data-domain="${domain}" data-datatype="${dataType}" style="
+          margin-top: 4px; padding: 4px 10px; background: #1976D2; color: white;
+          border: none; border-radius: 3px; cursor: pointer; font-size: 11px;
+        ">Opt Out</button>`;
+      } else if (mechanism.type === 'email') {
+        html += `<button class="privacy-tool-email-btn" data-mechanism-type="email" data-mechanism-email="${mechanism.value}" data-domain="${domain}" data-datatype="${dataType}" style="
+          margin-top: 4px; padding: 4px 10px; background: #1976D2; color: white;
+          border: none; border-radius: 3px; cursor: pointer; font-size: 11px;
+        ">Send Opt-Out Email</button>`;
+      } else if (mechanism.type === 'postal_mail') {
+        html += `<button class="privacy-tool-reminder-btn" data-mechanism-type="postal_mail" data-domain="${domain}" data-datatype="${dataType}" style="
+          margin-top: 4px; padding: 4px 10px; background: #FF9800; color: white;
+          border: none; border-radius: 3px; cursor: pointer; font-size: 11px;
+        ">📅 Add to Calendar (3 days)</button>`;
+      }
     }
   } else if (guidance.status === 'vague') {
     html += '<div style="font-size: 12px; color: #FF9800; font-weight: bold;">⚠️ Vague opt-out language</div>';
@@ -294,7 +414,7 @@ function renderOptOutSection(guidance: OptOutGuidance): string {
 
 // ─── Analysis Results Display ─────────────────────────────────────────────────
 
-function showAnalysisResults(analysis: Risk_Analysis) {
+async function showAnalysisResults(analysis: Risk_Analysis) {
   const overlay = document.getElementById('privacy-tool-alert-popup');
   if (!overlay) return;
 
@@ -303,6 +423,34 @@ function showAnalysisResults(analysis: Risk_Analysis) {
 
   // Task 4.1: Normalize opt-out guidance for all entries
   const normalized = normalizeOptOutGuidance(analysis);
+
+  // Task 9.1: Load tracking state from background
+  let actionRecords: ActionRecord[] = [];
+  let reminders: ReminderMetadata[] = [];
+  try {
+    const [actionsResp, remindersResp] = await Promise.all([
+      new Promise<{ success: boolean; records?: ActionRecord[] }>((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: 'GET_ACTIONS', payload: { domain: normalized.targetDomain } },
+          (resp) => resolve(resp ?? { success: false })
+        );
+      }),
+      new Promise<{ success: boolean; reminders?: ReminderMetadata[] }>((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: 'GET_REMINDERS', payload: { domain: normalized.targetDomain } },
+          (resp) => resolve(resp ?? { success: false })
+        );
+      }),
+    ]);
+    if (actionsResp.success && actionsResp.records) {
+      actionRecords = actionsResp.records;
+    }
+    if (remindersResp.success && remindersResp.reminders) {
+      reminders = remindersResp.reminders;
+    }
+  } catch {
+    // Tracking state unavailable — render without it
+  }
 
   const riskColors: Record<string, string> = {
     low: '#4CAF50',
@@ -326,6 +474,18 @@ function showAnalysisResults(analysis: Risk_Analysis) {
       ${normalized.targetDomain} · ${normalized.dataTypes.length} data types found
     </div>
   `;
+
+  // Policy summary gist at the top
+  if (normalized.policySummary && normalized.policySummary.length > 0) {
+    html += `
+      <div style="margin-bottom: 10px; padding: 10px; background: #FFF8E1; border-radius: 4px; border-left: 3px solid #FF9800; font-size: 12px; color: #333; line-height: 1.5;">
+        <div style="font-weight: bold; margin-bottom: 6px;">📋 Key Takeaways</div>
+        <ul style="margin: 0; padding-left: 18px;">
+          ${normalized.policySummary.map(point => `<li style="margin-bottom: 4px;">${point}</li>`).join('')}
+        </ul>
+      </div>
+    `;
+  }
 
   // Task 4.4: Legacy cache notice and re-analyze button
   if (isLegacyData) {
@@ -371,7 +531,7 @@ function showAnalysisResults(analysis: Risk_Analysis) {
           </div>
           ${dt.sharedWithThirdParties ? '<div style="font-size: 11px; color: #F44336; margin-top: 2px;">⚠ Shared with third parties</div>' : ''}
           ${dt.warningNote ? `<div style="font-size: 11px; color: #FF9800; margin-top: 2px;">⚠ ${dt.warningNote}</div>` : ''}
-          ${dt.optOutGuidance ? renderOptOutSection(dt.optOutGuidance) : ''}
+          ${dt.optOutGuidance ? renderOptOutSection(dt.optOutGuidance, normalized.targetDomain, dt.dataType, actionRecords, reminders) : ''}
         </div>
       `;
     }
@@ -394,6 +554,8 @@ function showAnalysisResults(analysis: Risk_Analysis) {
   overlay.style.maxHeight = '500px';
   overlay.style.overflowY = 'auto';
 
+  // ─── Attach event listeners after innerHTML is set ──────────────────────────
+
   const closeBtn = document.getElementById('privacy-tool-close-btn');
   if (closeBtn) {
     closeBtn.addEventListener('click', () => overlay.remove());
@@ -413,6 +575,111 @@ function showAnalysisResults(analysis: Risk_Analysis) {
       });
     }
   }
+
+  // Task 9.5: Clear history — removed (no longer tracking completed actions)
+
+  // "Set Reminder" button click handlers — downloads .ics file
+  const reminderBtns = overlay.querySelectorAll('.privacy-tool-reminder-btn');
+  for (const btn of reminderBtns) {
+    btn.addEventListener('click', () => {
+      const button = btn as HTMLButtonElement;
+      const domain = button.getAttribute('data-domain') || '';
+      const dataType = button.getAttribute('data-datatype') || '';
+
+      const icsContent = buildIcsFile(domain, dataType, 'postal_mail', 3);
+      const filename = `optout-reminder-${domain}-${dataType.replace(/\s+/g, '-')}.ics`;
+      downloadIcsFile(icsContent, filename);
+
+      button.textContent = '📅 Downloaded!';
+      button.style.background = '#4CAF50';
+      button.disabled = true;
+    });
+  }
+
+  // Follow-up reminder buttons removed (no longer tracking completed actions)
+  const optOutBtns = overlay.querySelectorAll('.privacy-tool-optout-btn');
+  for (const btn of optOutBtns) {
+    btn.addEventListener('click', () => {
+      const button = btn as HTMLButtonElement;
+      const url = button.getAttribute('data-mechanism-url') || '';
+      const domain = button.getAttribute('data-domain') || '';
+      const dataType = button.getAttribute('data-datatype') || '';
+      const mechanismType = button.getAttribute('data-mechanism-type') as OptOutMechanismType;
+
+      if (!isValidOptOutUrl(url)) {
+        button.textContent = '⚠ Invalid link';
+        button.style.background = '#F44336';
+        setTimeout(() => {
+          button.textContent = 'Opt Out';
+          button.style.background = '#1976D2';
+        }, 3000);
+        return;
+      }
+
+      // Optimistic UI
+      button.textContent = 'Opening...';
+      button.disabled = true;
+
+      chrome.runtime.sendMessage(
+        { type: 'OPEN_TAB', payload: { url } },
+        () => {
+          chrome.runtime.sendMessage(
+            {
+              type: 'SAVE_ACTION',
+              payload: {
+                domain,
+                dataType,
+                mechanismType,
+                action: 'opened_url' as const,
+                timestamp: new Date().toISOString(),
+              },
+            },
+            () => {
+              button.textContent = '✅ Done';
+              button.style.background = '#4CAF50';
+            }
+          );
+        }
+      );
+    });
+  }
+
+  // Task 9.3: "Send Opt-Out Email" button click handlers
+  const emailBtns = overlay.querySelectorAll('.privacy-tool-email-btn');
+  for (const btn of emailBtns) {
+    btn.addEventListener('click', () => {
+      const button = btn as HTMLButtonElement;
+      const email = button.getAttribute('data-mechanism-email') || '';
+      const domain = button.getAttribute('data-domain') || '';
+      const dataType = button.getAttribute('data-datatype') || '';
+
+      // Optimistic UI
+      button.textContent = 'Opening...';
+      button.disabled = true;
+
+      const mailtoLink = buildMailtoLink(email, domain, dataType);
+      window.location.href = mailtoLink;
+
+      chrome.runtime.sendMessage(
+        {
+          type: 'SAVE_ACTION',
+          payload: {
+            domain,
+            dataType,
+            mechanismType: 'email' as OptOutMechanismType,
+            action: 'composed_email' as const,
+            timestamp: new Date().toISOString(),
+          },
+        },
+        () => {
+          button.textContent = '✅ Done';
+          button.style.background = '#4CAF50';
+        }
+      );
+    });
+  }
+
+  // Old chrome.alarms handlers removed — using .ics download instead
 }
 
 function showAnalysisError(error: AnalysisErrorMessage['payload']) {

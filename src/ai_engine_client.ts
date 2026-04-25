@@ -387,7 +387,8 @@ You MUST respond with a single valid JSON object that conforms exactly to this s
       }
     }
   ],
-  "analysisWarnings": ["<string: top-level issues, e.g. policy text was truncated>"]
+  "analysisWarnings": ["<string: top-level issues, e.g. policy text was truncated>"],
+  "policySummary": ["<string: array of 3-5 short bullet points highlighting the most important things a user should know about this privacy policy — what data is collected, who it's shared with, biggest risks, and any red flags>"]
 }
 
 Risk level assignment rules:
@@ -470,7 +471,7 @@ async function parseAndValidateResponse(
   systemPrompt: string,
   userMessage: string,
   retryCount: number = 0
-): Promise<{ dataTypes: Risk_Analysis['dataTypes']; analysisWarnings: string[] }> {
+): Promise<{ dataTypes: Risk_Analysis['dataTypes']; analysisWarnings: string[]; policySummary?: string }> {
   try {
     const parsed = JSON.parse(responseText);
 
@@ -538,8 +539,9 @@ export async function analyzePolicy(parsed: Parsed_Policy): Promise<Risk_Analysi
   // Build prompts
   const systemPrompt = buildSystemPrompt();
   
-  // Apply token budget (28k for SaulLM, 100k for OpenAI)
-  const maxTokens = adapterType === 'openai' ? 100000 : 28000;
+  // Apply token budget — Llama 3.1 8B on HuggingFace free tier has 8192 token limit
+  // System prompt is ~2000 tokens, response needs ~2000, leaving ~4000 for policy text
+  const maxTokens = adapterType === 'openai' ? 100000 : 4000;
   const { text: fullText, wasTruncated } = truncateText(parsed.fullText, maxTokens);
   
   const targetDomain = new URL(parsed.sourceUrl).hostname;
@@ -549,7 +551,7 @@ export async function analyzePolicy(parsed: Parsed_Policy): Promise<Risk_Analysi
   const responseText = await adapter.complete(systemPrompt, userMessage);
 
   // Validate and parse
-  const { dataTypes, analysisWarnings } = await parseAndValidateResponse(
+  const { dataTypes, analysisWarnings, policySummary } = await parseAndValidateResponse(
     responseText,
     adapter,
     systemPrompt,
@@ -572,6 +574,7 @@ export async function analyzePolicy(parsed: Parsed_Policy): Promise<Risk_Analysi
     overallRiskLevel,
     dataTypes,
     analysisWarnings,
+    policySummary,
     modelUsed: adapter.modelId,
   };
 }

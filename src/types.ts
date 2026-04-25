@@ -57,6 +57,30 @@ export interface OptOutGuidance {
   warningNote: string | null;
 }
 
+// ─── Opt-Out Automation Types ─────────────────────────────────────────────────
+
+export type ActionType = 'opened_url' | 'composed_email' | 'reminder_set';
+
+export type ReminderType = 'postal_mail' | 'follow_up' | 'renewal';
+
+export interface ActionRecord {
+  id: string;
+  domain: string;
+  dataType: string;
+  mechanismType: OptOutMechanismType;
+  action: ActionType;
+  timestamp: string; // ISO 8601
+}
+
+export interface ReminderMetadata {
+  alarmName: string;
+  domain: string;
+  dataType: string;
+  reminderType: ReminderType;
+  scheduledTime: string; // ISO 8601
+  delayMinutes: number;
+}
+
 // ─── Data Type Entry ─────────────────────────────────────────────────────────
 
 export interface DataTypeEntry {
@@ -78,6 +102,7 @@ export interface Risk_Analysis {
   overallRiskLevel: RiskLevel;
   dataTypes: DataTypeEntry[];
   analysisWarnings: string[];
+  policySummary?: string[];
   modelUsed: string;
 }
 
@@ -154,6 +179,53 @@ export interface ApiKeyValidationResultMessage {
   payload: { success: boolean; error?: string };
 }
 
+// ─── Opt-Out Automation Message Types ─────────────────────────────────────────
+
+export interface OpenTabMessage {
+  type: 'OPEN_TAB';
+  payload: { url: string };
+}
+
+export interface SaveActionMessage {
+  type: 'SAVE_ACTION';
+  payload: Omit<ActionRecord, 'id'>;
+}
+
+export interface SaveActionResultMessage {
+  type: 'SAVE_ACTION_RESULT';
+  payload: { success: boolean; record?: ActionRecord; error?: string };
+}
+
+export interface GetActionsMessage {
+  type: 'GET_ACTIONS';
+  payload: { domain: string };
+}
+
+export interface ClearActionsMessage {
+  type: 'CLEAR_ACTIONS';
+  payload: { domain: string };
+}
+
+export interface ScheduleReminderMessage {
+  type: 'SCHEDULE_REMINDER';
+  payload: {
+    domain: string;
+    dataType: string;
+    reminderType: ReminderType;
+    delayMinutes: number;
+  };
+}
+
+export interface CancelReminderMessage {
+  type: 'CANCEL_REMINDER';
+  payload: { alarmName: string };
+}
+
+export interface GetRemindersMessage {
+  type: 'GET_REMINDERS';
+  payload: { domain: string };
+}
+
 export type ExtensionMessage =
   | PolicyDetectedMessage
   | ShowAlertPopupMessage
@@ -161,4 +233,12 @@ export type ExtensionMessage =
   | AnalysisCompleteMessage
   | AnalysisErrorMessage
   | ValidateApiKeyMessage
-  | ApiKeyValidationResultMessage;
+  | ApiKeyValidationResultMessage
+  | OpenTabMessage
+  | SaveActionMessage
+  | SaveActionResultMessage
+  | GetActionsMessage
+  | ClearActionsMessage
+  | ScheduleReminderMessage
+  | CancelReminderMessage
+  | GetRemindersMessage;
