@@ -914,28 +914,56 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
   animation: fadeInUp 0.3s ease-out both;
 }
 
-.privacy-label-tile:nth-child(1) { animation-delay: 0.05s; }
-.privacy-label-tile:nth-child(2) { animation-delay: 0.1s; }
-.privacy-label-tile:nth-child(3) { animation-delay: 0.15s; }
-.privacy-label-tile:nth-child(4) { animation-delay: 0.2s; }
-.privacy-label-tile:nth-child(5) { animation-delay: 0.25s; }
-.privacy-label-tile:nth-child(6) { animation-delay: 0.3s; }
-.privacy-label-tile:nth-child(7) { animation-delay: 0.35s; }
-.privacy-label-tile:nth-child(8) { animation-delay: 0.4s; }
+.privacy-label-tile:nth-child(1)  { animation-delay: 0.05s; }
+.privacy-label-tile:nth-child(2)  { animation-delay: 0.08s; }
+.privacy-label-tile:nth-child(3)  { animation-delay: 0.11s; }
+.privacy-label-tile:nth-child(4)  { animation-delay: 0.14s; }
+.privacy-label-tile:nth-child(5)  { animation-delay: 0.17s; }
+.privacy-label-tile:nth-child(6)  { animation-delay: 0.2s; }
+.privacy-label-tile:nth-child(7)  { animation-delay: 0.23s; }
+.privacy-label-tile:nth-child(8)  { animation-delay: 0.26s; }
+.privacy-label-tile:nth-child(9)  { animation-delay: 0.29s; }
+.privacy-label-tile:nth-child(10) { animation-delay: 0.32s; }
+.privacy-label-tile:nth-child(11) { animation-delay: 0.35s; }
+.privacy-label-tile:nth-child(12) { animation-delay: 0.38s; }
+.privacy-label-tile:nth-child(13) { animation-delay: 0.41s; }
+.privacy-label-tile:nth-child(14) { animation-delay: 0.44s; }
 
 .privacy-label-tile:hover {
   transform: translateY(-2px);
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
-.privacy-label-tile.high-risk {
+/* Risk-level tile coloring */
+.privacy-label-tile.risk-high {
   border-color: var(--risk-high);
   background: var(--risk-high-bg);
 }
+.privacy-label-tile.risk-high .tile-icon { color: var(--risk-high); }
+.privacy-label-tile.risk-high .tile-label { color: var(--risk-high); }
 
-.privacy-label-tile.high-risk .tile-icon {
-  color: var(--risk-high);
+.privacy-label-tile.risk-medium {
+  border-color: var(--risk-med);
+  background: var(--risk-med-bg);
 }
+.privacy-label-tile.risk-medium .tile-icon { color: var(--risk-med); }
+.privacy-label-tile.risk-medium .tile-label { color: var(--risk-med); }
+
+.privacy-label-tile.risk-low {
+  border-color: var(--risk-low);
+  background: var(--risk-low-bg);
+}
+.privacy-label-tile.risk-low .tile-icon { color: var(--risk-low); }
+.privacy-label-tile.risk-low .tile-label { color: var(--risk-low); }
+
+/* Inactive/not collected — grayed out */
+.privacy-label-tile.inactive {
+  opacity: 0.4;
+  border-color: var(--border);
+  background: var(--bg-section);
+}
+.privacy-label-tile.inactive .tile-icon { color: var(--text-muted); }
+.privacy-label-tile.inactive .tile-label { color: var(--text-muted); }
 
 .tile-icon {
   color: var(--brand-primary);
@@ -957,8 +985,20 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
   line-height: 1.2;
 }
 
-.privacy-label-tile.high-risk .tile-label {
-  color: var(--risk-high);
+/* Privacy legend */
+.privacy-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.privacy-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .data-type-card {
