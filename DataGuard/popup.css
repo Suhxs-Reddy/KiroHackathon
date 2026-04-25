@@ -66,6 +66,14 @@ body {
   background: var(--bg);
   scroll-behavior: smooth;
   scrollbar-gutter: stable;
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* ─── Smooth body entrance ─────────────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ─── Scrollbar ────────────────────────────────────────────────────────────── */
@@ -199,6 +207,7 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
   letter-spacing: 0.03em;
   white-space: nowrap;
   flex-shrink: 0;
+  transition: background 0.5s ease, color 0.5s ease, box-shadow 0.5s ease;
 }
 
 .risk-badge.high   { background: var(--risk-high-bg); color: var(--risk-high); box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1); }
@@ -486,7 +495,12 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   transition: background 0.15s ease;
+  animation: fadeInUp 0.25s ease-out both;
 }
+
+.breach-item:nth-child(1) { animation-delay: 0.05s; }
+.breach-item:nth-child(2) { animation-delay: 0.1s; }
+.breach-item:nth-child(3) { animation-delay: 0.15s; }
 
 .breach-item:hover {
   background: var(--bg);
@@ -530,11 +544,35 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
   border-radius: 4px;
 }
 
+/* ─── Analyze button shimmer ────────────────────────────────────────────────── */
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+#analyze-policy-btn {
+  background: linear-gradient(135deg, var(--brand-primary) 0%, #3B82F6 50%, var(--brand-primary) 100%);
+  background-size: 200% auto;
+}
+
+#analyze-policy-btn:hover {
+  animation: shimmer 2s linear infinite;
+}
+
+/* ─── No-breach shield bounce ──────────────────────────────────────────────── */
+
+@keyframes gentleBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
 .no-breach-msg {
   font-size: 13px;
   color: var(--text-secondary);
   text-align: center;
   padding: 12px 0;
+  animation: gentleBounce 2s ease-in-out infinite;
 }
 
 .no-breach-caveat {
@@ -713,7 +751,11 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  transition: all 0.2s ease;
+}
+
+.bookmark-btn:active {
+  transform: scale(0.9);
 }
 
 .bookmark-btn:hover {
@@ -798,11 +840,20 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
 
 /* ─── AI Policy Analysis section ───────────────────────────────────────────── */
 
+@keyframes pulseDot {
+  0%, 80%, 100% { transform: scale(0); opacity: 0; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
 #policy-analysis-loading {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 0;
+  gap: 12px;
+  padding: 16px 0;
+}
+
+#policy-analysis-loading .spinner {
+  animation: spin 0.6s linear infinite, pulseDot 1.4s ease-in-out infinite;
 }
 
 .policy-summary {
@@ -832,7 +883,14 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
 
 .policy-summary ul li {
   margin-bottom: 3px;
+  animation: fadeInUp 0.3s ease-out both;
 }
+
+.policy-summary ul li:nth-child(1) { animation-delay: 0.1s; }
+.policy-summary ul li:nth-child(2) { animation-delay: 0.15s; }
+.policy-summary ul li:nth-child(3) { animation-delay: 0.2s; }
+.policy-summary ul li:nth-child(4) { animation-delay: 0.25s; }
+.policy-summary ul li:nth-child(5) { animation-delay: 0.3s; }
 
 @media (prefers-color-scheme: dark) {
   .policy-summary {
@@ -851,7 +909,21 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
   margin-bottom: 8px;
   border-left: 3px solid var(--border-strong);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
+  animation: fadeInUp 0.3s ease-out both;
 }
+
+.data-type-card:nth-child(1)  { animation-delay: 0.05s; }
+.data-type-card:nth-child(2)  { animation-delay: 0.1s; }
+.data-type-card:nth-child(3)  { animation-delay: 0.15s; }
+.data-type-card:nth-child(4)  { animation-delay: 0.2s; }
+.data-type-card:nth-child(5)  { animation-delay: 0.25s; }
+.data-type-card:nth-child(6)  { animation-delay: 0.3s; }
+.data-type-card:nth-child(7)  { animation-delay: 0.35s; }
+.data-type-card:nth-child(8)  { animation-delay: 0.4s; }
+.data-type-card:nth-child(9)  { animation-delay: 0.45s; }
+.data-type-card:nth-child(10) { animation-delay: 0.5s; }
+.data-type-card:nth-child(11) { animation-delay: 0.55s; }
+.data-type-card:nth-child(12) { animation-delay: 0.6s; }
 
 .data-type-card:hover {
   transform: translateY(-1px);
@@ -884,9 +956,14 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
   border-radius: 20px;
 }
 
-.risk-pill.high   { background: var(--risk-high-bg); color: var(--risk-high); }
+.risk-pill.high   { background: var(--risk-high-bg); color: var(--risk-high); animation: subtlePulse 2s ease-in-out infinite; }
 .risk-pill.medium { background: var(--risk-med-bg);  color: var(--risk-med); }
 .risk-pill.low    { background: var(--risk-low-bg);  color: var(--risk-low); }
+
+@keyframes subtlePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
 
 .data-type-purposes {
   font-size: 12px;
@@ -905,6 +982,10 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
   font-size: 11px;
   color: var(--risk-high);
   margin-top: 2px;
+  padding: 2px 6px;
+  background: var(--risk-high-bg);
+  border-radius: 4px;
+  display: inline-block;
 }
 
 .optout-indicator {
@@ -918,7 +999,7 @@ body:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
   margin-top: 6px;
 }
 
-.optout-indicator.available   { background: var(--risk-low-bg);  color: var(--risk-low); }
+.optout-indicator.available   { background: var(--risk-low-bg);  color: var(--risk-low); box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.1); }
 .optout-indicator.vague       { background: var(--risk-med-bg);  color: var(--risk-med); }
 .optout-indicator.unavailable { background: var(--bg-section); color: var(--text-muted); border: 1px solid var(--border); }
 

@@ -497,6 +497,11 @@ function renderPolicyAnalysis(analysis) {
   const container = el('policy-analysis-content')
   container.innerHTML = ''
 
+  // Update the header risk badge with AI analysis risk level
+  if (analysis.overallRiskLevel) {
+    renderRiskBadge(analysis.overallRiskLevel)
+  }
+
   // Hide the analyze button since we have results
   const btn = el('analyze-policy-btn')
   if (btn) btn.classList.add('hidden')
