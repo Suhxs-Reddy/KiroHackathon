@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Generate Technical Report",
+  "description": "Generates a comprehensive technical report documenting the entire repository including workflow steps, architectural approaches, integration patterns, and implementation details in a narrative style",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Generate a comprehensive technical report documenting this Privacy Tool browser extension repository. Include:\n\n1. **Executive Summary**: High-level overview of the project, its purpose, and key capabilities\n2. **Architecture Overview**: Message-driven pipeline architecture, component responsibilities, and data flow\n3. **Technology Stack**: Build system (Vite, TypeScript), core dependencies (Readability, pdf.js, Ajv), browser APIs used\n4. **Implementation Approach**: \n   - Content script for DOM scanning and policy detection\n   - Background worker for pipeline orchestration\n   - Fetcher for document retrieval with redirect handling\n   - Parser module for multi-format extraction (HTML/PDF/text)\n   - AI engine client for analysis and validation\n5. **Workflow Steps**: Complete pipeline from policy detection → fetch → parse → AI analysis → caching → UI display\n6. **Integration Patterns**: Chrome extension message passing, storage APIs, AI model integration (SaulLM-7B/GPT-4o)\n7. **Testing Strategy**: Unit tests, property-based tests, integration tests, smoke tests\n8. **Code Organization**: File structure, naming conventions, error handling patterns\n9. **Current State**: Implemented features, known limitations, future enhancements\n\nReview all source files in src/, test files in tests/, spec files in .kiro/specs/, and configuration files. Write this as a narrative technical report suitable for onboarding new developers or documenting the project for stakeholders. Save the report as TECHNICAL_REPORT.md in the root directory."
+  }
+}
