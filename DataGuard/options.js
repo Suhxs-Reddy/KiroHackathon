@@ -50,6 +50,64 @@ async function renderBookmarks() {
 
 renderBookmarks()
 
+// ─── API Key Settings ─────────────────────────────────────────────────────────
+
+const apiKeyInput = document.getElementById('api-key-input')
+const adapterSelect = document.getElementById('adapter-type')
+const saveApiKeyBtn = document.getElementById('save-api-key-btn')
+const apiKeyStatus = document.getElementById('api-key-status')
+
+// Load existing settings
+chrome.storage.local.get(['apiKey', 'adapterType'], (result) => {
+  if (result.apiKey) {
+    apiKeyInput.value = result.apiKey
+  }
+  if (result.adapterType) {
+    adapterSelect.value = result.adapterType
+  }
+})
+
+saveApiKeyBtn.addEventListener('click', async () => {
+  const apiKey = apiKeyInput.value.trim()
+  const adapterType = adapterSelect.value
+
+  if (!apiKey) {
+    apiKeyStatus.className = 'status'
+    apiKeyStatus.textContent = 'Please enter an API key.'
+    return
+  }
+
+  saveApiKeyBtn.disabled = true
+  saveApiKeyBtn.textContent = 'Validating...'
+  apiKeyStatus.className = 'status'
+  apiKeyStatus.textContent = 'Testing API key...'
+
+  try {
+    const resp = await chrome.runtime.sendMessage({
+      type: 'VALIDATE_API_KEY',
+      payload: { apiKey, adapterType }
+    })
+
+    if (resp && resp.success) {
+      apiKeyStatus.className = 'status ok'
+      apiKeyStatus.textContent = '✓ API key saved and validated.'
+    } else {
+      apiKeyStatus.className = 'status'
+      apiKeyStatus.style.color = '#DC2626'
+      apiKeyStatus.textContent = `Validation failed: ${resp?.error || 'Unknown error'}`
+    }
+  } catch (err) {
+    apiKeyStatus.className = 'status'
+    apiKeyStatus.style.color = '#DC2626'
+    apiKeyStatus.textContent = `Error: ${err.message}`
+  } finally {
+    saveApiKeyBtn.disabled = false
+    saveApiKeyBtn.textContent = 'Save & Validate'
+  }
+})
+
+// ─── Cache Status ─────────────────────────────────────────────────────────────
+
 async function loadCacheStatus() {
   try {
     const resp = await chrome.runtime.sendMessage({ type: 'GET_CACHE_STATUS' })
