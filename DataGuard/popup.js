@@ -663,7 +663,7 @@ function escapeAttr(str) {
  * Reads stored metadata for the domain, finds the first policy URL,
  * sends INITIATE_ANALYSIS to background, and renders results.
  */
-async function analyzePolicyFromPopup(domain) {
+async function analyzePolicyFromPopup(domain, policyUrlFromScan) {
   const btn = el('analyze-policy-btn')
   const loadingEl = el('policy-analysis-loading')
   const contentEl = el('policy-analysis-content')
@@ -677,22 +677,22 @@ async function analyzePolicyFromPopup(domain) {
   if (contentEl) contentEl.innerHTML = ''
 
   try {
-    // Step 1: Get stored metadata for this domain (content script stores it as metadata_{domain})
-    // Try both with and without www. prefix since content script uses window.location.hostname
-    const metadataKey = `metadata_${domain}`
-    const metadataKeyWww = `metadata_www.${domain}`
-    const stored = await new Promise(resolve => {
-      chrome.storage.local.get([metadataKey, metadataKeyWww], result => {
-        resolve(result[metadataKey] || result[metadataKeyWww] || null)
-      }))
-    })
+    let policyUrl = policyUrlFromScan || null
 
-    let policyUrl = null
+    if (!policyUrl) {
+      // Fallback: check stored metadata from our content script
+      const metadataKey = `metadata_${domain}`
+      const metadataKeyWww = `metadata_www.${domain}`
+      const stored = await new Promise(resolve => {
+        chrome.storage.local.get([metadataKey, metadataKeyWww], result => {
+          resolve(result[metadataKey] || result[metadataKeyWww] || null)
+        })
+      })
 
-    if (stored && stored.detectedPolicyLinks && stored.detectedPolicyLinks.length > 0) {
-      // Prefer privacy_policy type, fall back to first link
-      const privacyLink = stored.detectedPolicyLinks.find(l => l.linkType === 'privacy_policy')
-      policyUrl = privacyLink ? privacyLink.url : stored.detectedPolicyLinks[0].url
+      if (stored && stored.detectedPolicyLinks && stored.detectedPolicyLinks.length > 0) {
+        const privacyLink = stored.detectedPolicyLinks.find(l => l.linkType === 'privacy_policy')
+        policyUrl = privacyLink ? privacyLink.url : stored.detectedPolicyLinks[0].url
+      }
     }
 
     if (!policyUrl) {
@@ -792,7 +792,7 @@ async function analyzePolicyFromPopup(domain) {
 /**
  * Initialize the policy analysis section: check for cached results, wire up button.
  */
-async function initPolicyAnalysis(domain) {
+async function initPolicyAnalysis(domain, policyUrlFromScan) {
   const btn = el('analyze-policy-btn')
   const contentEl = el('policy-analysis-content')
 
@@ -809,7 +809,7 @@ async function initPolicyAnalysis(domain) {
   // Wire up the analyze button
   if (btn) {
     btn.addEventListener('click', () => {
-      analyzePolicyFromPopup(domain)
+      analyzePolicyFromPopup(domain, policyUrlFromScan)
     })
   }
 }
@@ -888,7 +888,7 @@ async function init() {
   renderOptOut(pageData.domain)
   renderScanTime()
   initBookmarkBtn(pageData.domain)
-  initPolicyAnalysis(pageData.domain)
+  initPolicyAnalysis(pageData.domain, pageData.policyUrl)
 
   // Settings link
   document.getElementById('settings-link').addEventListener('click', (e) => {
