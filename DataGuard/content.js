@@ -248,19 +248,19 @@ const AGREE_PATTERNS = [
   /you\s*agree\s*to/i,
 ]
 
-function findTermsAgreementElements() {
-  const results = []
+let _dataguardBadgeInjected = false
 
-  // Check labels, paragraphs, spans near checkboxes
+function findTermsAgreementElements() {
+  if (_dataguardBadgeInjected) return []
+  const results = []
   const candidates = document.querySelectorAll('label, p, span, div')
   for (const el of candidates) {
     const text = (el.textContent || '').trim()
     if (text.length < 10 || text.length > 500) continue
+    if (!AGREE_PATTERNS.some(p => p.test(text))) continue
+    // Skip if this element is inside another match
+    if (el.closest('.dataguard-inline-badge') || el.closest('.dataguard-dashboard')) continue
 
-    const matches = AGREE_PATTERNS.some(p => p.test(text))
-    if (!matches) continue
-
-    // Find policy links within this element
     const links = el.querySelectorAll('a[href]')
     const policyLinks = []
     for (const link of links) {
@@ -268,65 +268,86 @@ function findTermsAgreementElements() {
       const href = link.getAttribute('href') || ''
       if (/privacy|terms|policy|tos|data/i.test(linkText + ' ' + href)) {
         try {
-          policyLinks.push({
-            url: new URL(href, window.location.href).href,
-            text: link.textContent.trim(),
-          })
+          policyLinks.push({ url: new URL(href, window.location.href).href, text: link.textContent.trim() })
         } catch (_) {}
       }
     }
-
     if (policyLinks.length > 0) {
       results.push({ element: el, policyLinks })
+      break // Only take the FIRST match
     }
   }
-
   return results
 }
 
-function injectRiskBadge(element, policyLinks) {
-  // Don't inject twice
-  if (element.querySelector('.dataguard-inline-badge')) return
+function buildDashboardHtml(analysis) {
+  const risk = analysis.overallRiskLevel || 'medium'
+  const riskColors = { high: '#DC2626', medium: '#D97706', low: '#059669' }
+  const riskBgs = { high: '#FEF2F2', medium: '#FFFBEB', low: '#ECFDF5' }
+  const rc = riskColors[risk] || riskColors.medium
 
-  // Create the badge
+  let html = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-weight:700;font-size:14px;color:#1F2937;">DataGuard Analysis</div>
+      <div style="display:flex;align-items:center;gap:4px;padding:3px 10px;border-radius:8px;background:${riskBgs[risk]};color:${rc};font-size:11px;font-weight:700;letter-spacing:0.03em;">${risk.toUpperCase()} RISK</div>
+      <button class="dataguard-close" style="background:none;border:none;font-size:18px;cursor:pointer;color:#9CA3AF;padding:0;line-height:1;">&times;</button>
+    </div>
+  `
+
+  // Key takeaways
+  if (analysis.policySummary && analysis.policySummary.length > 0) {
+    html += `<div style="background:#FFFBEB;border:1px solid #FDE68A;border-left:3px solid #F59E0B;border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:11px;color:#92400E;line-height:1.5;">
+      <div style="font-weight:600;margin-bottom:4px;">Key Takeaways</div>
+      <ul style="margin:0;padding-left:14px;list-style:disc;">${analysis.policySummary.map(p => `<li style="margin-bottom:2px;">${p}</li>`).join('')}</ul>
+    </div>`
+  }
+
+  // Data types
+  if (analysis.dataTypes && analysis.dataTypes.length > 0) {
+    html += `<div style="max-height:200px;overflow-y:auto;">`
+    for (const dt of analysis.dataTypes) {
+      const dtc = riskColors[dt.riskLevel] || '#6B7280'
+      const dtbg = riskBgs[dt.riskLevel] || '#F9FAFB'
+      html += `<div style="background:#F9FAFB;border:1px solid #E5E7EB;border-left:3px solid ${dtc};border-radius:6px;padding:8px 10px;margin-bottom:6px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-weight:600;font-size:12px;color:#1F2937;">${dt.dataType}</span>
+          <span style="font-size:9px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:10px;background:${dtbg};color:${dtc};">${dt.riskLevel}</span>
+        </div>
+        ${dt.purposes && dt.purposes.length > 0 ? `<div style="font-size:10px;color:#6B7280;margin-top:2px;">${dt.purposes.slice(0,2).join(', ')}</div>` : ''}
+        ${dt.sharedWithThirdParties ? `<div style="font-size:10px;color:#DC2626;margin-top:2px;">Shared with third parties</div>` : ''}
+        ${dt.optOutGuidance && dt.optOutGuidance.status === 'available' ? `<div style="font-size:10px;color:#059669;margin-top:2px;">Opt-out available</div>` : ''}
+        ${dt.optOutGuidance && dt.optOutGuidance.status === 'unavailable' ? `<div style="font-size:10px;color:#9CA3AF;margin-top:2px;">No opt-out found</div>` : ''}
+      </div>`
+    }
+    html += `</div>`
+  }
+
+  html += `<div style="font-size:9px;color:#9CA3AF;margin-top:6px;">Model: ${analysis.modelUsed || 'AI'}</div>`
+  return html
+}
+
+function injectRiskBadge(element, policyLinks) {
+  if (_dataguardBadgeInjected) return
+  if (element.querySelector('.dataguard-inline-badge')) return
+  _dataguardBadgeInjected = true
+
   const badge = document.createElement('div')
   badge.className = 'dataguard-inline-badge'
   badge.style.cssText = `
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 8px;
-    padding: 6px 12px;
-    background: #EFF6FF;
-    border: 1px solid #93C5FD;
-    border-radius: 8px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 12px;
-    color: #1D4ED8;
-    cursor: pointer;
-    transition: all 0.2s ease;
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;
+    padding: 6px 12px; background: #EFF6FF; border: 1px solid #93C5FD;
+    border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 12px; color: #1D4ED8; cursor: pointer; transition: all 0.2s ease;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   `
-
-  // Shield icon SVG
   const shieldSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`
-
   badge.innerHTML = `${shieldSvg} <span class="dataguard-badge-text">Scanning terms...</span>`
 
-  // Hover effect
-  badge.addEventListener('mouseenter', () => {
-    badge.style.transform = 'translateY(-1px)'
-    badge.style.boxShadow = '0 3px 8px rgba(37, 99, 235, 0.2)'
-  })
-  badge.addEventListener('mouseleave', () => {
-    badge.style.transform = 'translateY(0)'
-    badge.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)'
-  })
+  badge.addEventListener('mouseenter', () => { badge.style.transform = 'translateY(-1px)'; badge.style.boxShadow = '0 3px 8px rgba(37,99,235,0.2)' })
+  badge.addEventListener('mouseleave', () => { badge.style.transform = 'translateY(0)'; badge.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)' })
 
-  // Insert after the agreement text
   element.appendChild(badge)
 
-  // Start analysis — pick the first privacy/terms link
   const targetUrl = policyLinks[0].url
   chrome.runtime.sendMessage(
     { type: 'INITIATE_ANALYSIS', payload: { policyUrl: targetUrl } },
@@ -337,29 +358,50 @@ function injectRiskBadge(element, policyLinks) {
       if (response && response.success && response.analysis) {
         const risk = response.analysis.overallRiskLevel
         const count = response.analysis.dataTypes ? response.analysis.dataTypes.length : 0
-
         const colors = {
           high: { bg: '#FEF2F2', border: '#FCA5A5', text: '#DC2626' },
           medium: { bg: '#FFFBEB', border: '#FDE68A', text: '#D97706' },
           low: { bg: '#ECFDF5', border: '#A7F3D0', text: '#059669' },
         }
         const c = colors[risk] || colors.medium
-
         badge.style.background = c.bg
         badge.style.borderColor = c.border
         badge.style.color = c.text
+        textEl.textContent = `${risk.toUpperCase()} RISK · ${count} data types — Click for details`
 
-        const riskLabel = risk.toUpperCase()
-        textEl.textContent = `${riskLabel} RISK · ${count} data types collected — Click for details`
+        // Click opens inline dashboard on THIS page
+        badge.addEventListener('click', (e) => {
+          e.stopPropagation()
+          // Remove existing dashboard if any
+          const existing = document.querySelector('.dataguard-dashboard')
+          if (existing) { existing.remove(); return }
 
-        // Click opens the extension popup
-        badge.addEventListener('click', () => {
-          // Store the analysis so the popup can show it
-          chrome.storage.local.set({
-            [`policy_analysis_${window.location.hostname.replace(/^www\./, '')}`]: response.analysis
-          })
-          // Can't programmatically open popup, but we can show a notification
-          chrome.runtime.sendMessage({ type: 'OPEN_TAB', payload: { url: 'chrome-extension://' + chrome.runtime.id + '/DataGuard/popup.html' } })
+          const dashboard = document.createElement('div')
+          dashboard.className = 'dataguard-dashboard'
+          dashboard.style.cssText = `
+            position: fixed; top: 20px; right: 20px; width: 340px; max-height: 500px;
+            overflow-y: auto; background: #fff; border: 2px solid #2563EB;
+            border-radius: 12px; padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+            z-index: 2147483647; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 13px; color: #1F2937; animation: dataguardSlideIn 0.25s ease-out;
+          `
+          // Add animation keyframes
+          if (!document.querySelector('#dataguard-anim-style')) {
+            const style = document.createElement('style')
+            style.id = 'dataguard-anim-style'
+            style.textContent = `
+              @keyframes dataguardSlideIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
+              .dataguard-dashboard::-webkit-scrollbar { width: 4px; }
+              .dataguard-dashboard::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 2px; }
+            `
+            document.head.appendChild(style)
+          }
+
+          dashboard.innerHTML = buildDashboardHtml(response.analysis)
+          document.body.appendChild(dashboard)
+
+          // Close button
+          dashboard.querySelector('.dataguard-close').addEventListener('click', () => dashboard.remove())
         })
       } else {
         textEl.textContent = 'Could not analyze terms'
@@ -371,7 +413,6 @@ function injectRiskBadge(element, policyLinks) {
   )
 }
 
-// Run detection after page loads
 function detectAndInjectBadges() {
   const agreements = findTermsAgreementElements()
   for (const { element, policyLinks } of agreements) {
@@ -379,18 +420,11 @@ function detectAndInjectBadges() {
   }
 }
 
-// Run on page load and observe for dynamic content (SPAs)
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', detectAndInjectBadges)
 } else {
   detectAndInjectBadges()
 }
 
-// Also observe for dynamically added content (React, Vue, etc.)
-const observer = new MutationObserver(() => {
-  detectAndInjectBadges()
-})
-observer.observe(document.body || document.documentElement, {
-  childList: true,
-  subtree: true,
-})
+const _dgObserver = new MutationObserver(() => { detectAndInjectBadges() })
+_dgObserver.observe(document.body || document.documentElement, { childList: true, subtree: true })
