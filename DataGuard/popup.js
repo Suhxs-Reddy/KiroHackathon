@@ -117,6 +117,32 @@ function findOptOut(domain) {
   }) || null
 }
 
+// ─── Privacy label categories (Apple App Store-style) ─────────────────────
+
+const PRIVACY_CATEGORIES = {
+  'health': { label: 'Health', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>' },
+  'financial': { label: 'Financial', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>' },
+  'location': { label: 'Location', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' },
+  'contact': { label: 'Contact Info', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>' },
+  'browsing': { label: 'Browsing', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>' },
+  'identifiers': { label: 'Identifiers', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' },
+  'sensitive': { label: 'Sensitive', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>' },
+  'usage': { label: 'Usage Data', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' },
+}
+
+function mapDataTypeToCategory(dataType) {
+  const dt = dataType.toLowerCase()
+  if (dt.includes('health') || dt.includes('medical')) return 'health'
+  if (dt.includes('financial') || dt.includes('payment') || dt.includes('transaction')) return 'financial'
+  if (dt.includes('location') || dt.includes('gps') || dt.includes('geolocation')) return 'location'
+  if (dt.includes('email') || dt.includes('phone') || dt.includes('contact')) return 'contact'
+  if (dt.includes('browsing') || dt.includes('search') || dt.includes('history')) return 'browsing'
+  if (dt.includes('identifier') || dt.includes('device') || dt.includes('ip address') || dt.includes('biometric') || dt.includes('government')) return 'identifiers'
+  if (dt.includes('sensitive') || dt.includes('biometric')) return 'sensitive'
+  if (dt.includes('usage') || dt.includes('diagnostic') || dt.includes('interest') || dt.includes('inferred')) return 'usage'
+  return 'usage' // default
+}
+
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
 
 function el(id) { return document.getElementById(id) }
@@ -528,6 +554,37 @@ function renderPolicyAnalysis(analysis) {
       summaryList.classList.toggle('collapsed', isExpanded)
     })
     container.appendChild(summaryBox)
+  }
+
+  // Privacy label grid (Apple App Store-style overview)
+  if (analysis.dataTypes && analysis.dataTypes.length > 0) {
+    const categories = new Map()
+    for (const dt of analysis.dataTypes) {
+      const cat = mapDataTypeToCategory(dt.dataType)
+      if (!categories.has(cat)) {
+        categories.set(cat, { count: 0, highRisk: false })
+      }
+      const entry = categories.get(cat)
+      entry.count++
+      if (dt.riskLevel === 'high') entry.highRisk = true
+    }
+
+    const grid = document.createElement('div')
+    grid.className = 'privacy-label-grid'
+
+    for (const [catId, info] of categories) {
+      const meta = PRIVACY_CATEGORIES[catId]
+      if (!meta) continue
+      const tile = document.createElement('div')
+      tile.className = `privacy-label-tile ${info.highRisk ? 'high-risk' : ''}`
+      tile.innerHTML = `
+        <div class="tile-icon">${meta.icon}</div>
+        <div class="tile-label">${meta.label}</div>
+      `
+      grid.appendChild(tile)
+    }
+
+    container.appendChild(grid)
   }
 
   // Data type cards
