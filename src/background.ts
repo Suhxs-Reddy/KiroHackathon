@@ -146,16 +146,23 @@ async function handleInitiateAnalysis(
 
 async function handleValidateApiKey(message: ValidateApiKeyMessage) {
   try {
+    console.log('[background] Validating API key for', message.payload.adapterType);
     await testApiKey(message.payload.apiKey, message.payload.adapterType);
 
     // Save API key on success
     await saveApiKey(message.payload.apiKey, message.payload.adapterType);
+    console.log('[background] API key validated and saved');
 
     return { success: true };
   } catch (error) {
+    const errorMsg = error instanceof AnalysisError
+      ? error.message
+      : error instanceof Error ? error.message : String(error);
+    console.error('[background] API key validation failed:', errorMsg);
+
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMsg,
     };
   }
 }

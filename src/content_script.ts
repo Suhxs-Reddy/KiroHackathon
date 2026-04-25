@@ -1,4 +1,4 @@
-import type { ExtensionMessage, PolicyLink, Page_Metadata, ShowAlertPopupMessage } from './types.js';
+import type { ExtensionMessage, PolicyLink, Page_Metadata, ShowAlertPopupMessage, Risk_Analysis, AnalysisErrorMessage } from './types.js';
 
 // ─── Task 2.1: Policy Link Detection ─────────────────────────────────────────
 
@@ -113,10 +113,16 @@ function initContentScript() {
   }
 }
 
-// Listen for SHOW_ALERT_POPUP message from background
+// Listen for messages from background
 chrome.runtime.onMessage.addListener((message: ExtensionMessage) => {
   if (message.type === 'SHOW_ALERT_POPUP') {
     injectAlertPopup(message.payload);
+  }
+  if (message.type === 'ANALYSIS_COMPLETE') {
+    showAnalysisResults(message.payload);
+  }
+  if (message.type === 'ANALYSIS_ERROR') {
+    showAnalysisError(message.payload);
   }
 });
 
@@ -210,5 +216,105 @@ function injectAlertPopup(payload: ShowAlertPopupMessage['payload']) {
     closeBtn.addEventListener('click', () => {
       overlay.remove();
     });
+  }
+}
+
+
+// ─── Analysis Results Display ─────────────────────────────────────────────────
+
+function showAnalysisResults(analysis: Risk_Analysis) {
+  const overlay = document.getElementById('privacy-tool-alert-popup');
+  if (!overlay) return;
+
+  const riskColors: Record<string, string> = {
+    low: '#4CAF50',
+    medium: '#FF9800',
+    high: '#F44336',
+  };
+
+  const riskColor = riskColors[analysis.overallRiskLevel] || '#666';
+
+  let html = `
+    <button id="privacy-tool-close-btn" style="
+      position: absolute; top: 8px; right: 8px;
+      background: transparent; border: none; font-size: 20px; cursor: pointer; color: #999;
+    ">×</button>
+    <div style="font-weight: bold; margin-bottom: 8px;">🔒 Privacy Analysis Complete</div>
+    <div style="margin-bottom: 12px;">
+      <span style="font-weight: bold;">Overall Risk: </span>
+      <span style="color: ${riskColor}; font-weight: bold; text-transform: uppercase;">${analysis.overallRiskLevel}</span>
+    </div>
+    <div style="margin-bottom: 8px; font-size: 12px; color: #666;">
+      ${analysis.targetDomain} · ${analysis.dataTypes.length} data types found
+    </div>
+  `;
+
+  if (analysis.dataTypes.length > 0) {
+    html += '<div style="max-height: 300px; overflow-y: auto;">';
+    for (const dt of analysis.dataTypes) {
+      const dtColor = riskColors[dt.riskLevel] || '#666';
+      html += `
+        <div style="margin-bottom: 8px; padding: 8px; background: #f5f5f5; border-radius: 4px; border-left: 3px solid ${dtColor};">
+          <div style="font-weight: bold; font-size: 13px;">${dt.dataType}
+            <span style="color: ${dtColor}; font-size: 11px; text-transform: uppercase;"> ${dt.riskLevel}</span>
+          </div>
+          <div style="font-size: 12px; color: #555; margin-top: 4px;">
+            ${dt.purposes.slice(0, 2).join(', ')}
+          </div>
+          ${dt.sharedWithThirdParties ? '<div style="font-size: 11px; color: #F44336; margin-top: 2px;">⚠ Shared with third parties</div>' : ''}
+          ${dt.warningNote ? `<div style="font-size: 11px; color: #FF9800; margin-top: 2px;">⚠ ${dt.warningNote}</div>` : ''}
+        </div>
+      `;
+    }
+    html += '</div>';
+  } else {
+    html += '<div style="color: #666; font-style: italic;">No personal data collection detected.</div>';
+  }
+
+  if (analysis.analysisWarnings.length > 0) {
+    html += '<div style="margin-top: 8px; font-size: 11px; color: #999;">';
+    for (const w of analysis.analysisWarnings) {
+      html += `<div>⚠ ${w}</div>`;
+    }
+    html += '</div>';
+  }
+
+  html += `<div style="margin-top: 8px; font-size: 10px; color: #bbb;">Model: ${analysis.modelUsed}</div>`;
+
+  overlay.innerHTML = html;
+  overlay.style.maxHeight = '500px';
+  overlay.style.overflowY = 'auto';
+
+  const closeBtn = document.getElementById('privacy-tool-close-btn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => overlay.remove());
+  }
+}
+
+function showAnalysisError(error: AnalysisErrorMessage['payload']) {
+  const overlay = document.getElementById('privacy-tool-alert-popup');
+  if (!overlay) return;
+
+  let html = `
+    <button id="privacy-tool-close-btn" style="
+      position: absolute; top: 8px; right: 8px;
+      background: transparent; border: none; font-size: 20px; cursor: pointer; color: #999;
+    ">×</button>
+    <div style="font-weight: bold; margin-bottom: 8px; color: #F44336;">❌ Analysis Failed</div>
+    <div style="margin-bottom: 12px;">${error.message}</div>
+  `;
+
+  if (error.retryable) {
+    html += `<button id="privacy-tool-retry-btn" style="
+      width: 100%; padding: 10px; background: #FF9800; color: white;
+      border: none; border-radius: 4px; cursor: pointer; font-weight: bold;
+    ">Retry</button>`;
+  }
+
+  overlay.innerHTML = html;
+
+  const closeBtn = document.getElementById('privacy-tool-close-btn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => overlay.remove());
   }
 }

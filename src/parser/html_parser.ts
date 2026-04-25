@@ -1,83 +1,91 @@
-import { Readability } from '@mozilla/readability';
-import { JSDOM } from 'jsdom';
 import { Parsed_Policy, Section } from '../types.js';
 
-// ─── Task 4.1: HTML Parser ────────────────────────────────────────────────────
+// ─── Task 4.1: HTML Parser (Service Worker Compatible) ────────────────────────
+// Service workers don't have DOMParser or document APIs.
+// We use regex-based extraction which works in any JS context.
+
+// Strip HTML tags and decode common entities
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Extract headings and their content from HTML
+function extractSections(html: string): Section[] {
+  const sections: Section[] = [];
+
+  // Match heading tags (h1-h6) and capture content between them
+  const headingRegex = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi;
+  const headings: Array<{ level: number; text: string; index: number }> = [];
+
+  let match;
+  while ((match = headingRegex.exec(html)) !== null) {
+    headings.push({
+      level: parseInt(match[1]),
+      text: stripHtml(match[2]),
+      index: match.index,
+    });
+  }
+
+  if (headings.length === 0) {
+    // No headings found — extract body content as single section
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    const bodyContent = bodyMatch ? bodyMatch[1] : html;
+    const text = stripHtml(bodyContent);
+
+    if (text.length > 0) {
+      sections.push({ heading: '', text, level: 0 });
+    }
+    return sections;
+  }
+
+  // Extract text between headings
+  for (let i = 0; i < headings.length; i++) {
+    const heading = headings[i];
+    const nextHeading = headings[i + 1];
+
+    // Get content between this heading and the next one
+    const startIdx = heading.index + html.substring(heading.index).indexOf('>') + 1;
+    const closingTag = `</h${heading.level}>`;
+    const afterHeading = html.indexOf(closingTag, startIdx) + closingTag.length;
+    const endIdx = nextHeading ? nextHeading.index : html.length;
+
+    const sectionHtml = html.substring(afterHeading, endIdx);
+    const sectionText = stripHtml(sectionHtml);
+
+    if (heading.text.length > 0 || sectionText.length > 0) {
+      sections.push({
+        heading: heading.text,
+        text: sectionText,
+        level: heading.level,
+      });
+    }
+  }
+
+  return sections;
+}
 
 export function parseHtml(content: string, url: string): Parsed_Policy {
-  // Use JSDOM to parse HTML
-  const dom = new JSDOM(content, { url });
-  const document = dom.window.document;
-
-  // Try Readability first
-  const reader = new Readability(document.cloneNode(true) as Document);
-  const article = reader.parse();
-
-  let targetDoc = document;
-  
-  if (article && article.content) {
-    // Use Readability's extracted content
-    const articleDom = new JSDOM(article.content);
-    targetDoc = articleDom.window.document;
-  }
-
-  // Extract sections from the document
-  const sections: Section[] = [];
-  const headingSelectors = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
-  
-  // Find all headings and their following content
-  const allElements = targetDoc.body?.querySelectorAll('*') || [];
-  
-  let currentHeading = '';
-  let currentLevel = 0;
-  let currentText: string[] = [];
-
-  const saveSection = () => {
-    if (currentHeading || currentText.length > 0) {
-      sections.push({
-        heading: currentHeading,
-        text: currentText.join('\n').trim(),
-        level: currentLevel,
-      });
+  const sections = extractSections(content);
+  const fullText = sections.map(s => {
+    if (s.heading) {
+      return `${s.heading}\n${s.text}`;
     }
-  };
-
-  for (const element of allElements) {
-    const tagName = element.tagName.toLowerCase();
-
-    if (headingSelectors.includes(tagName)) {
-      // Save previous section
-      saveSection();
-
-      // Start new section
-      currentHeading = element.textContent?.trim() || '';
-      currentLevel = parseInt(tagName.charAt(1)); // h1 -> 1, h2 -> 2, etc.
-      currentText = [];
-    } else if (element.tagName === 'P' || element.tagName === 'DIV' || element.tagName === 'LI') {
-      // Add paragraph/div/list text to current section
-      const text = element.textContent?.trim();
-      if (text && text.length > 0) {
-        currentText.push(text);
-      }
-    }
-  }
-
-  // Save final section
-  saveSection();
-
-  // If no sections were found, extract all body text
-  if (sections.length === 0) {
-    const bodyText = targetDoc.body?.textContent?.trim() || '';
-    if (bodyText) {
-      sections.push({
-        heading: '',
-        text: bodyText,
-        level: 0,
-      });
-    }
-  }
-
-  const fullText = sections.map(s => s.text).join('\n\n');
+    return s.text;
+  }).join('\n\n');
 
   return {
     sourceUrl: url,

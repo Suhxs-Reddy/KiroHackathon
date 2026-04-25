@@ -86,7 +86,7 @@ export class AnalysisError extends Error {
 // ─── LLM Adapter Interface ───────────────────────────────────────────────────
 
 export interface LLMAdapter {
-  complete(systemPrompt: string, userMessage: string): Promise<string>;
+  complete(systemPrompt: string, userMessage: string, timeoutMs?: number): Promise<string>;
   modelId: string;
 }
 

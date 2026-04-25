@@ -14,6 +14,7 @@ export default defineConfig({
         entryFileNames: '[name].js',
         format: 'es',
       },
+      external: [],
     },
     target: 'es2020',
     minify: false,

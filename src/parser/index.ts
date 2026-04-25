@@ -1,6 +1,5 @@
 import { RawDocument, Parsed_Policy, AnalysisError } from '../types.js';
 import { parseHtml } from './html_parser.js';
-import { parsePdf } from './pdf_parser.js';
 import { parsePlainText } from './text_parser.js';
 
 // ─── Task 4.6: Parser Dispatcher ──────────────────────────────────────────────
@@ -15,10 +14,17 @@ export async function parseDocument(raw: RawDocument): Promise<Parsed_Policy> {
         return parseHtml(raw.content, raw.finalUrl);
 
       case 'pdf':
-        if (!(raw.content instanceof ArrayBuffer)) {
-          throw new Error('PDF content must be an ArrayBuffer');
-        }
-        return await parsePdf(raw.content, raw.finalUrl);
+        // PDF parsing requires pdfjs-dist which uses DOM/canvas APIs
+        // not available in the service worker. For now, return an error
+        // directing the user to use the HTML version of the policy.
+        // PDF support will be added via offscreen document in a future version.
+        throw new AnalysisError(
+          'UNSUPPORTED_FORMAT',
+          'PDF policies are not yet supported. Please try the HTML version of the privacy policy page instead.',
+          false,
+          true,
+          'PDF parsing disabled — pdfjs-dist incompatible with MV3 service worker'
+        );
 
       case 'text':
         if (typeof raw.content !== 'string') {
