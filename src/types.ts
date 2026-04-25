@@ -38,6 +38,27 @@ export interface Parsed_Policy {
   parsedAt: string; // ISO 8601
 }
 
+// ─── Opt-Out Guidance Types ───────────────────────────────────────────────────
+
+export type OptOutStatus = 'available' | 'vague' | 'unavailable';
+
+export type OptOutMechanismType = 'settings_url' | 'email' | 'web_form' | 'account_steps' | 'postal_mail';
+
+export interface OptOutMechanism {
+  type: OptOutMechanismType;
+  value: string;
+  instructionText: string | null;
+}
+
+export interface OptOutGuidance {
+  status: OptOutStatus;
+  mechanisms: OptOutMechanism[];
+  summary: string;
+  warningNote: string | null;
+}
+
+// ─── Data Type Entry ─────────────────────────────────────────────────────────
+
 export interface DataTypeEntry {
   dataType: string;
   riskLevel: RiskLevel;
@@ -46,6 +67,7 @@ export interface DataTypeEntry {
   thirdPartyCategories: string[];
   warningNote: string | null;
   deviationNote: string | null;
+  optOutGuidance?: OptOutGuidance;
 }
 
 export interface Risk_Analysis {

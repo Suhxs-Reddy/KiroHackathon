@@ -1,4 +1,4 @@
-import type { ExtensionMessage, PolicyLink, Page_Metadata, ShowAlertPopupMessage, Risk_Analysis, AnalysisErrorMessage } from './types.js';
+import type { ExtensionMessage, PolicyLink, Page_Metadata, ShowAlertPopupMessage, Risk_Analysis, AnalysisErrorMessage, OptOutGuidance, OptOutStatus } from './types.js';
 
 // ─── Task 2.1: Policy Link Detection ─────────────────────────────────────────
 
@@ -220,11 +220,89 @@ function injectAlertPopup(payload: ShowAlertPopupMessage['payload']) {
 }
 
 
+// ─── Opt-Out Guidance Helpers ──────────────────────────────────────────────────
+
+export function normalizeOptOutGuidance(analysis: Risk_Analysis): Risk_Analysis {
+  return {
+    ...analysis,
+    dataTypes: analysis.dataTypes.map(dt => ({
+      ...dt,
+      optOutGuidance: dt.optOutGuidance ?? {
+        status: 'unavailable' as OptOutStatus,
+        mechanisms: [],
+        summary: 'Opt-out information was not extracted for this analysis.',
+        warningNote: null,
+      },
+    })),
+  };
+}
+
+function renderOptOutMechanism(mechanism: { type: string; value: string; instructionText: string | null }): string {
+  let html = '';
+  switch (mechanism.type) {
+    case 'settings_url':
+    case 'web_form':
+      html += `<div style="margin-top: 4px; font-size: 12px;">
+        🔗 <a href="${mechanism.value}" target="_blank" rel="noopener noreferrer" style="color: #1976D2; text-decoration: underline;">${mechanism.value}</a>
+      </div>`;
+      break;
+    case 'email':
+      html += `<div style="margin-top: 4px; font-size: 12px;">
+        ✉️ <a href="mailto:${mechanism.value}" style="color: #1976D2; text-decoration: underline;">${mechanism.value}</a>
+      </div>`;
+      break;
+    case 'account_steps':
+      html += `<div style="margin-top: 4px; font-size: 12px;">📋 Steps:</div>`;
+      html += '<ol style="margin: 4px 0 0 20px; padding: 0; font-size: 12px;">';
+      const steps = mechanism.value.split('\n').filter(s => s.trim());
+      for (const step of steps) {
+        html += `<li style="margin-bottom: 2px;">${step.trim()}</li>`;
+      }
+      html += '</ol>';
+      break;
+    case 'postal_mail':
+      html += `<div style="margin-top: 4px; font-size: 12px;">📬 ${mechanism.value}</div>`;
+      break;
+  }
+  if (mechanism.instructionText) {
+    html += `<div style="margin-top: 2px; font-size: 11px; color: #555; font-style: italic;">${mechanism.instructionText}</div>`;
+  }
+  return html;
+}
+
+function renderOptOutSection(guidance: OptOutGuidance): string {
+  let html = '<div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #ddd;">';
+
+  if (guidance.status === 'available') {
+    html += '<div style="font-size: 12px; color: #4CAF50; font-weight: bold;">✅ Opt-out available</div>';
+    for (const mechanism of guidance.mechanisms) {
+      html += renderOptOutMechanism(mechanism);
+    }
+  } else if (guidance.status === 'vague') {
+    html += '<div style="font-size: 12px; color: #FF9800; font-weight: bold;">⚠️ Vague opt-out language</div>';
+    html += `<div style="font-size: 11px; color: #555; margin-top: 2px;">${guidance.summary}</div>`;
+    if (guidance.warningNote) {
+      html += `<div style="font-size: 11px; color: #FF9800; margin-top: 2px;">⚠ ${guidance.warningNote}</div>`;
+    }
+  } else {
+    html += '<div style="font-size: 12px; color: #999;">❌ No opt-out option found in the policy for this data type.</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
 // ─── Analysis Results Display ─────────────────────────────────────────────────
 
 function showAnalysisResults(analysis: Risk_Analysis) {
   const overlay = document.getElementById('privacy-tool-alert-popup');
   if (!overlay) return;
+
+  // Task 4.4: Legacy cache detection — check before normalization
+  const isLegacyData = analysis.dataTypes.some(dt => dt.optOutGuidance === undefined);
+
+  // Task 4.1: Normalize opt-out guidance for all entries
+  const normalized = normalizeOptOutGuidance(analysis);
 
   const riskColors: Record<string, string> = {
     low: '#4CAF50',
@@ -232,7 +310,7 @@ function showAnalysisResults(analysis: Risk_Analysis) {
     high: '#F44336',
   };
 
-  const riskColor = riskColors[analysis.overallRiskLevel] || '#666';
+  const riskColor = riskColors[normalized.overallRiskLevel] || '#666';
 
   let html = `
     <button id="privacy-tool-close-btn" style="
@@ -242,16 +320,46 @@ function showAnalysisResults(analysis: Risk_Analysis) {
     <div style="font-weight: bold; margin-bottom: 8px;">🔒 Privacy Analysis Complete</div>
     <div style="margin-bottom: 12px;">
       <span style="font-weight: bold;">Overall Risk: </span>
-      <span style="color: ${riskColor}; font-weight: bold; text-transform: uppercase;">${analysis.overallRiskLevel}</span>
+      <span style="color: ${riskColor}; font-weight: bold; text-transform: uppercase;">${normalized.overallRiskLevel}</span>
     </div>
     <div style="margin-bottom: 8px; font-size: 12px; color: #666;">
-      ${analysis.targetDomain} · ${analysis.dataTypes.length} data types found
+      ${normalized.targetDomain} · ${normalized.dataTypes.length} data types found
     </div>
   `;
 
-  if (analysis.dataTypes.length > 0) {
+  // Task 4.4: Legacy cache notice and re-analyze button
+  if (isLegacyData) {
+    html += `
+      <div style="margin-bottom: 10px; padding: 8px; background: #E3F2FD; border-radius: 4px; font-size: 12px; color: #1565C0;">
+        ℹ️ Opt-out information is not available for this analysis.
+        <button id="privacy-tool-reanalyze-btn" style="
+          display: block; margin-top: 6px; padding: 6px 12px;
+          background: #1976D2; color: white; border: none; border-radius: 4px;
+          cursor: pointer; font-size: 12px; font-weight: bold;
+        ">Re-analyze with opt-out extraction</button>
+      </div>
+    `;
+  }
+
+  // Task 4.2: Opt-out summary section
+  if (normalized.dataTypes.length > 0) {
+    const availableCount = normalized.dataTypes.filter(dt => dt.optOutGuidance?.status === 'available').length;
+    const vagueCount = normalized.dataTypes.filter(dt => dt.optOutGuidance?.status === 'vague').length;
+    const unavailableCount = normalized.dataTypes.filter(dt => dt.optOutGuidance?.status === 'unavailable').length;
+
+    html += `
+      <div style="margin-bottom: 10px; padding: 8px; background: #FAFAFA; border-radius: 4px; font-size: 12px;">
+        <div style="font-weight: bold; margin-bottom: 4px;">Opt-Out Summary</div>
+        <div style="color: #4CAF50;">✅ ${availableCount} data type${availableCount !== 1 ? 's' : ''} with opt-out available</div>
+        <div style="color: #FF9800;">⚠️ ${vagueCount} data type${vagueCount !== 1 ? 's' : ''} with vague opt-out language</div>
+        <div style="color: #999;">❌ ${unavailableCount} data type${unavailableCount !== 1 ? 's' : ''} with no opt-out found</div>
+      </div>
+    `;
+  }
+
+  if (normalized.dataTypes.length > 0) {
     html += '<div style="max-height: 300px; overflow-y: auto;">';
-    for (const dt of analysis.dataTypes) {
+    for (const dt of normalized.dataTypes) {
       const dtColor = riskColors[dt.riskLevel] || '#666';
       html += `
         <div style="margin-bottom: 8px; padding: 8px; background: #f5f5f5; border-radius: 4px; border-left: 3px solid ${dtColor};">
@@ -263,6 +371,7 @@ function showAnalysisResults(analysis: Risk_Analysis) {
           </div>
           ${dt.sharedWithThirdParties ? '<div style="font-size: 11px; color: #F44336; margin-top: 2px;">⚠ Shared with third parties</div>' : ''}
           ${dt.warningNote ? `<div style="font-size: 11px; color: #FF9800; margin-top: 2px;">⚠ ${dt.warningNote}</div>` : ''}
+          ${dt.optOutGuidance ? renderOptOutSection(dt.optOutGuidance) : ''}
         </div>
       `;
     }
@@ -271,15 +380,15 @@ function showAnalysisResults(analysis: Risk_Analysis) {
     html += '<div style="color: #666; font-style: italic;">No personal data collection detected.</div>';
   }
 
-  if (analysis.analysisWarnings.length > 0) {
+  if (normalized.analysisWarnings.length > 0) {
     html += '<div style="margin-top: 8px; font-size: 11px; color: #999;">';
-    for (const w of analysis.analysisWarnings) {
+    for (const w of normalized.analysisWarnings) {
       html += `<div>⚠ ${w}</div>`;
     }
     html += '</div>';
   }
 
-  html += `<div style="margin-top: 8px; font-size: 10px; color: #bbb;">Model: ${analysis.modelUsed}</div>`;
+  html += `<div style="margin-top: 8px; font-size: 10px; color: #bbb;">Model: ${normalized.modelUsed}</div>`;
 
   overlay.innerHTML = html;
   overlay.style.maxHeight = '500px';
@@ -288,6 +397,21 @@ function showAnalysisResults(analysis: Risk_Analysis) {
   const closeBtn = document.getElementById('privacy-tool-close-btn');
   if (closeBtn) {
     closeBtn.addEventListener('click', () => overlay.remove());
+  }
+
+  // Task 4.4: Wire up re-analyze button
+  if (isLegacyData) {
+    const reanalyzeBtn = document.getElementById('privacy-tool-reanalyze-btn');
+    if (reanalyzeBtn) {
+      reanalyzeBtn.addEventListener('click', () => {
+        chrome.runtime.sendMessage({
+          type: 'INITIATE_ANALYSIS',
+          payload: { policyUrl: normalized.policyUrl },
+        } as ExtensionMessage);
+        reanalyzeBtn.textContent = 'Re-analyzing...';
+        (reanalyzeBtn as HTMLButtonElement).disabled = true;
+      });
+    }
   }
 }
 

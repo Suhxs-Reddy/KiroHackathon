@@ -60,6 +60,61 @@ function validateRiskAnalysis(data: unknown): ValidationResult {
     if (e.deviationNote !== null && typeof e.deviationNote !== 'string') {
       errors.push(`dataTypes[${i}].deviationNote must be a string or null`);
     }
+
+    // Validate optOutGuidance if present (optional for backward compatibility)
+    if (e.optOutGuidance !== undefined && e.optOutGuidance !== null) {
+      if (typeof e.optOutGuidance !== 'object' || Array.isArray(e.optOutGuidance)) {
+        errors.push(`dataTypes[${i}].optOutGuidance must be an object`);
+      } else {
+        const g = e.optOutGuidance as Record<string, unknown>;
+
+        const VALID_STATUSES = ['available', 'vague', 'unavailable'];
+        if (typeof g.status !== 'string' || !VALID_STATUSES.includes(g.status)) {
+          errors.push(`dataTypes[${i}].optOutGuidance.status must be 'available', 'vague', or 'unavailable'`);
+        }
+
+        if (!Array.isArray(g.mechanisms)) {
+          errors.push(`dataTypes[${i}].optOutGuidance.mechanisms must be an array`);
+        } else {
+          // Status-mechanisms consistency
+          if (g.status === 'available' && (g.mechanisms as unknown[]).length === 0) {
+            errors.push(`dataTypes[${i}].optOutGuidance.mechanisms must be non-empty when status is 'available'`);
+          }
+          if (g.status === 'unavailable' && (g.mechanisms as unknown[]).length > 0) {
+            errors.push(`dataTypes[${i}].optOutGuidance.mechanisms must be empty when status is 'unavailable'`);
+          }
+
+          // Validate each mechanism
+          const VALID_MECHANISM_TYPES = ['settings_url', 'email', 'web_form', 'account_steps', 'postal_mail'];
+          const mechanisms = g.mechanisms as unknown[];
+          for (let j = 0; j < mechanisms.length; j++) {
+            const m = mechanisms[j];
+            if (typeof m !== 'object' || m === null || Array.isArray(m)) {
+              errors.push(`dataTypes[${i}].optOutGuidance.mechanisms[${j}] must be an object`);
+              continue;
+            }
+            const mech = m as Record<string, unknown>;
+            if (typeof mech.type !== 'string' || !VALID_MECHANISM_TYPES.includes(mech.type)) {
+              errors.push(`dataTypes[${i}].optOutGuidance.mechanisms[${j}].type is invalid`);
+            }
+            if (typeof mech.value !== 'string' || mech.value.length === 0) {
+              errors.push(`dataTypes[${i}].optOutGuidance.mechanisms[${j}].value must be a non-empty string`);
+            }
+            if (mech.instructionText !== null && typeof mech.instructionText !== 'string') {
+              errors.push(`dataTypes[${i}].optOutGuidance.mechanisms[${j}].instructionText must be string or null`);
+            }
+          }
+        }
+
+        if (typeof g.summary !== 'string') {
+          errors.push(`dataTypes[${i}].optOutGuidance.summary must be a string`);
+        }
+
+        if (g.warningNote !== null && typeof g.warningNote !== 'string') {
+          errors.push(`dataTypes[${i}].optOutGuidance.warningNote must be string or null`);
+        }
+      }
+    }
   }
 
   // Validate analysisWarnings entries
@@ -317,7 +372,19 @@ You MUST respond with a single valid JSON object that conforms exactly to this s
       "sharedWithThirdParties": <boolean>,
       "thirdPartyCategories": ["<string: category of third party, e.g. 'advertising networks'>"],
       "warningNote": "<string or null: flag if language is ambiguous or vague>",
-      "deviationNote": "<string or null: flag if data access is unusually broad>"
+      "deviationNote": "<string or null: flag if data access is unusually broad>",
+      "optOutGuidance": {
+        "status": "<'available' | 'vague' | 'unavailable'>",
+        "mechanisms": [
+          {
+            "type": "<'settings_url' | 'email' | 'web_form' | 'account_steps' | 'postal_mail'>",
+            "value": "<string: URL, email address, steps, or postal address>",
+            "instructionText": "<string or null: human-readable instructions>"
+          }
+        ],
+        "summary": "<string: plain-language summary of opt-out situation>",
+        "warningNote": "<string or null: explains vague language if status is 'vague'>"
+      }
     }
   ],
   "analysisWarnings": ["<string: top-level issues, e.g. policy text was truncated>"]
@@ -336,6 +403,17 @@ Deviation rules (set deviationNote):
 - Set deviationNote when the policy claims rights to sell, license, or transfer data beyond what is needed to operate the service
 - Set deviationNote when data retention is indefinite or unusually long (> 5 years)
 - Set deviationNote when the policy grants rights to combine data across unrelated services
+
+Opt-out extraction rules:
+- For each data type, look for opt-out instructions, settings references, contact information, and opt-out URLs in the policy text
+- Set status to "available" when the policy describes a concrete opt-out mechanism (a URL, email address, web form, account settings path, or postal address)
+- Set status to "vague" when the policy mentions opting out but does not describe a specific mechanism (e.g., "you may opt out" with no link or instructions)
+- Set status to "unavailable" when the policy contains no opt-out information for that data type
+- When status is "available", the mechanisms array MUST contain at least one entry
+- When status is "unavailable", the mechanisms array MUST be empty
+- Extract mechanism details (URLs, email addresses, account settings paths, step-by-step instructions) exactly as stated in the policy text — do NOT fabricate URLs, email addresses, or instructions that are not in the policy
+- Write all summary and instructionText in plain language at or below an 8th-grade reading level
+- Do NOT fabricate or infer opt-out mechanisms that are not explicitly described in the policy text
 
 Extract ALL distinct data types mentioned. Do not summarize multiple data types into one unless they are genuinely the same category. If no personal data collection is mentioned, return an empty dataTypes array.
 
