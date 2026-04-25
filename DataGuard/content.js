@@ -349,68 +349,85 @@ function injectRiskBadge(element, policyLinks) {
   element.appendChild(badge)
 
   const targetUrl = policyLinks[0].url
+
+  // Send analysis request and poll for result
+  // (MV3 service workers can close message channels before long AI calls complete)
+  const domain = window.location.hostname.replace(/^www\./, '')
+  const storageKey = targetUrl // background caches analysis under the policy URL
+
   chrome.runtime.sendMessage(
     { type: 'INITIATE_ANALYSIS', payload: { policyUrl: targetUrl } },
-    (response) => {
+    () => {} // fire and forget — we'll poll storage
+  )
+
+  // Poll for the cached result
+  let pollCount = 0
+  const pollInterval = setInterval(() => {
+    pollCount++
+    if (pollCount > 60) { // 60 seconds max
+      clearInterval(pollInterval)
       const textEl = badge.querySelector('.dataguard-badge-text')
-      if (!textEl) return
-
-      if (response && response.success && response.analysis) {
-        const risk = response.analysis.overallRiskLevel
-        const count = response.analysis.dataTypes ? response.analysis.dataTypes.length : 0
-        const colors = {
-          high: { bg: '#FEF2F2', border: '#FCA5A5', text: '#DC2626' },
-          medium: { bg: '#FFFBEB', border: '#FDE68A', text: '#D97706' },
-          low: { bg: '#ECFDF5', border: '#A7F3D0', text: '#059669' },
-        }
-        const c = colors[risk] || colors.medium
-        badge.style.background = c.bg
-        badge.style.borderColor = c.border
-        badge.style.color = c.text
-        textEl.textContent = `${risk.toUpperCase()} RISK · ${count} data types — Click for details`
-
-        // Click opens inline dashboard on THIS page
-        badge.addEventListener('click', (e) => {
-          e.stopPropagation()
-          // Remove existing dashboard if any
-          const existing = document.querySelector('.dataguard-dashboard')
-          if (existing) { existing.remove(); return }
-
-          const dashboard = document.createElement('div')
-          dashboard.className = 'dataguard-dashboard'
-          dashboard.style.cssText = `
-            position: fixed; top: 20px; right: 20px; width: 340px; max-height: 500px;
-            overflow-y: auto; background: #fff; border: 2px solid #2563EB;
-            border-radius: 12px; padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.15);
-            z-index: 2147483647; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 13px; color: #1F2937; animation: dataguardSlideIn 0.25s ease-out;
-          `
-          // Add animation keyframes
-          if (!document.querySelector('#dataguard-anim-style')) {
-            const style = document.createElement('style')
-            style.id = 'dataguard-anim-style'
-            style.textContent = `
-              @keyframes dataguardSlideIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
-              .dataguard-dashboard::-webkit-scrollbar { width: 4px; }
-              .dataguard-dashboard::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 2px; }
-            `
-            document.head.appendChild(style)
-          }
-
-          dashboard.innerHTML = buildDashboardHtml(response.analysis)
-          document.body.appendChild(dashboard)
-
-          // Close button
-          dashboard.querySelector('.dataguard-close').addEventListener('click', () => dashboard.remove())
-        })
-      } else {
-        textEl.textContent = 'Could not analyze terms'
+      if (textEl) {
+        textEl.textContent = 'Analysis timed out'
         badge.style.background = '#F9FAFB'
         badge.style.borderColor = '#E5E7EB'
         badge.style.color = '#6B7280'
       }
+      return
     }
-  )
+
+    chrome.storage.local.get([storageKey], (result) => {
+      const analysis = result[storageKey]
+      if (!analysis || !analysis.overallRiskLevel) return // not ready yet
+
+      clearInterval(pollInterval)
+      const textEl = badge.querySelector('.dataguard-badge-text')
+      if (!textEl) return
+
+      const risk = analysis.overallRiskLevel
+      const count = analysis.dataTypes ? analysis.dataTypes.length : 0
+      const colors = {
+        high: { bg: '#FEF2F2', border: '#FCA5A5', text: '#DC2626' },
+        medium: { bg: '#FFFBEB', border: '#FDE68A', text: '#D97706' },
+        low: { bg: '#ECFDF5', border: '#A7F3D0', text: '#059669' },
+      }
+      const c = colors[risk] || colors.medium
+      badge.style.background = c.bg
+      badge.style.borderColor = c.border
+      badge.style.color = c.text
+      textEl.textContent = `${risk.toUpperCase()} RISK · ${count} data types — Click for details`
+
+      // Click opens inline dashboard
+      badge.addEventListener('click', (e) => {
+        e.stopPropagation()
+        const existing = document.querySelector('.dataguard-dashboard')
+        if (existing) { existing.remove(); return }
+
+        const dashboard = document.createElement('div')
+        dashboard.className = 'dataguard-dashboard'
+        dashboard.style.cssText = `
+          position: fixed; top: 20px; right: 20px; width: 340px; max-height: 500px;
+          overflow-y: auto; background: #fff; border: 2px solid #2563EB;
+          border-radius: 12px; padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+          z-index: 2147483647; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-size: 13px; color: #1F2937; animation: dataguardSlideIn 0.25s ease-out;
+        `
+        if (!document.querySelector('#dataguard-anim-style')) {
+          const style = document.createElement('style')
+          style.id = 'dataguard-anim-style'
+          style.textContent = `
+            @keyframes dataguardSlideIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
+            .dataguard-dashboard::-webkit-scrollbar { width: 4px; }
+            .dataguard-dashboard::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 2px; }
+          `
+          document.head.appendChild(style)
+        }
+        dashboard.innerHTML = buildDashboardHtml(analysis)
+        document.body.appendChild(dashboard)
+        dashboard.querySelector('.dataguard-close').addEventListener('click', () => dashboard.remove())
+      })
+    })
+  }, 1000) // check every second
 }
 
 function detectAndInjectBadges() {
