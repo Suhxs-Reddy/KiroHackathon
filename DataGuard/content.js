@@ -239,93 +239,36 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 })
 
 
-// ─── Auto-detect "agree to terms" checkboxes and inject risk badge ────────────
+// ─── Auto-detect terms/privacy links and show DataGuard dashboard ─────────────
 
-const AGREE_PATTERNS = [
-  /agree\s*(to|with)\s*(the|our)?\s*(terms|privacy|policy|tos)/i,
-  /by\s*(creating|signing|registering|continuing)/i,
-  /i\s*(accept|agree|consent)/i,
-  /you\s*agree\s*to/i,
-]
+let _dataguardAutoTriggered = false
 
-let _dataguardBadgeInjected = false
-
-function findTermsAgreementElements() {
-  if (_dataguardBadgeInjected) return []
-  const results = []
-  const candidates = document.querySelectorAll('label, p, span, div')
-  for (const el of candidates) {
-    const text = (el.textContent || '').trim()
-    if (text.length < 10 || text.length > 1000) continue
-    if (!AGREE_PATTERNS.some(p => p.test(text))) continue
-    if (el.closest('.dataguard-inline-badge') || el.closest('.dataguard-dashboard-frame')) continue
-
-    // Look for policy links INSIDE this element
-    let policyLinks = []
-    const links = el.querySelectorAll('a[href]')
-    for (const link of links) {
-      const linkText = (link.textContent || '').toLowerCase()
-      const href = link.getAttribute('href') || ''
-      if (/privacy|terms|policy|tos|data|legal/i.test(linkText + ' ' + href)) {
-        try {
-          policyLinks.push({ url: new URL(href, window.location.href).href, text: link.textContent.trim() })
-        } catch (_) {}
-      }
-    }
-
-    // If no links found inside, search the PARENT and nearby siblings
-    if (policyLinks.length === 0) {
-      const parent = el.parentElement
-      if (parent) {
-        const parentLinks = parent.querySelectorAll('a[href]')
-        for (const link of parentLinks) {
-          const linkText = (link.textContent || '').toLowerCase()
-          const href = link.getAttribute('href') || ''
-          if (/privacy|terms|policy|tos|data|legal/i.test(linkText + ' ' + href)) {
-            try {
-              policyLinks.push({ url: new URL(href, window.location.href).href, text: link.textContent.trim() })
-            } catch (_) {}
-          }
-        }
-      }
-    }
-
-    // If still no links, try finding ANY privacy/terms link on the page
-    if (policyLinks.length === 0) {
-      const allLinks = document.querySelectorAll('a[href]')
-      for (const link of allLinks) {
-        const linkText = (link.textContent || '').toLowerCase()
-        const href = link.getAttribute('href') || ''
-        if (/privacy\s*policy|terms\s*of\s*service|data\s*policy/i.test(linkText)) {
-          try {
-            policyLinks.push({ url: new URL(href, window.location.href).href, text: link.textContent.trim() })
-          } catch (_) {}
-        }
-      }
-    }
-
-    if (policyLinks.length > 0) {
-      results.push({ element: el, policyLinks })
-      break
+function findPolicyUrl() {
+  const allLinks = document.querySelectorAll('a[href]')
+  for (const link of allLinks) {
+    const text = (link.textContent || '').toLowerCase()
+    const href = (link.getAttribute('href') || '').toLowerCase()
+    if (/privacy\s*policy|privacy\s*notice|data\s*policy|terms\s*of\s*service|terms\s*of\s*use/i.test(text) ||
+        /\/privacy|\/terms|\/tos|\/legal/i.test(href)) {
+      try {
+        return new URL(link.getAttribute('href'), window.location.href).href
+      } catch (_) {}
     }
   }
-  return results
+  return null
 }
 
-function buildDashboardHtml(analysis) {
-  // Not used anymore — we use an iframe to show the full popup UI
-  return ''
-}
-
-function openDashboardIframe(analysis) {
+function openDashboardIframe() {
   const existing = document.querySelector('.dataguard-dashboard-frame')
   if (existing) { existing.remove(); return }
 
-  // Store analysis so popup can read it
-  const domain = window.location.hostname.replace(/^www\./, '')
-  chrome.storage.local.set({ [`policy_analysis_${domain}`]: analysis, '_dataguard_auto_render': domain })
+  if (!document.querySelector('#dataguard-anim-style')) {
+    const style = document.createElement('style')
+    style.id = 'dataguard-anim-style'
+    style.textContent = `@keyframes dataguardSlideIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }`
+    document.head.appendChild(style)
+  }
 
-  // Create iframe container
   const container = document.createElement('div')
   container.className = 'dataguard-dashboard-frame'
   container.style.cssText = `
@@ -335,14 +278,6 @@ function openDashboardIframe(analysis) {
     animation: dataguardSlideIn 0.25s ease-out;
   `
 
-  if (!document.querySelector('#dataguard-anim-style')) {
-    const style = document.createElement('style')
-    style.id = 'dataguard-anim-style'
-    style.textContent = `@keyframes dataguardSlideIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }`
-    document.head.appendChild(style)
-  }
-
-  // Close button overlay
   const closeBtn = document.createElement('button')
   closeBtn.textContent = '×'
   closeBtn.style.cssText = `
@@ -362,98 +297,44 @@ function openDashboardIframe(analysis) {
   document.body.appendChild(container)
 }
 
-function injectRiskBadge(element, policyLinks) {
-  if (_dataguardBadgeInjected) return
-  if (element.querySelector('.dataguard-inline-badge')) return
-  _dataguardBadgeInjected = true
+function autoDetectAndAnalyze() {
+  if (_dataguardAutoTriggered) return
 
-  const badge = document.createElement('div')
-  badge.className = 'dataguard-inline-badge'
-  badge.style.cssText = `
-    display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;
-    padding: 6px 12px; background: #EFF6FF; border: 1px solid #93C5FD;
-    border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 12px; color: #1D4ED8; cursor: pointer; transition: all 0.2s ease;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  `
-  const shieldSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`
-  badge.innerHTML = `${shieldSvg} <span class="dataguard-badge-text">Scanning terms...</span>`
+  // Check if page has "agree to terms" text
+  const bodyText = document.body ? document.body.innerText.slice(0, 5000) : ''
+  const hasAgreement = /agree\s*(to|with)\s*(the|our)?\s*(terms|privacy|policy)/i.test(bodyText) ||
+                       /by\s*(creating|signing|registering|continuing).*agree/i.test(bodyText) ||
+                       /i\s*(accept|agree|consent)\s*(to|the)/i.test(bodyText)
 
-  badge.addEventListener('mouseenter', () => { badge.style.transform = 'translateY(-1px)'; badge.style.boxShadow = '0 3px 8px rgba(37,99,235,0.2)' })
-  badge.addEventListener('mouseleave', () => { badge.style.transform = 'translateY(0)'; badge.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)' })
+  if (!hasAgreement) return
 
-  element.appendChild(badge)
+  // Find a privacy/terms link on the page
+  const policyUrl = findPolicyUrl()
+  if (!policyUrl) return
 
-  const targetUrl = policyLinks[0].url
+  _dataguardAutoTriggered = true
 
-  // Send analysis request and poll for result
-  // (MV3 service workers can close message channels before long AI calls complete)
+  // Store the domain so popup auto-renders
   const domain = window.location.hostname.replace(/^www\./, '')
-  const storageKey = targetUrl // background caches analysis under the policy URL
+  chrome.storage.local.set({ '_dataguard_auto_render': domain })
 
+  // Fire the analysis
   chrome.runtime.sendMessage(
-    { type: 'INITIATE_ANALYSIS', payload: { policyUrl: targetUrl } },
-    () => {} // fire and forget — we'll poll storage
+    { type: 'INITIATE_ANALYSIS', payload: { policyUrl } },
+    () => {}
   )
 
-  // Poll for the cached result
-  let pollCount = 0
-  const pollInterval = setInterval(() => {
-    pollCount++
-    if (pollCount > 60) { // 60 seconds max
-      clearInterval(pollInterval)
-      const textEl = badge.querySelector('.dataguard-badge-text')
-      if (textEl) {
-        textEl.textContent = 'Analysis timed out'
-        badge.style.background = '#F9FAFB'
-        badge.style.borderColor = '#E5E7EB'
-        badge.style.color = '#6B7280'
-      }
-      return
-    }
-
-    chrome.storage.local.get([storageKey], (result) => {
-      const analysis = result[storageKey]
-      if (!analysis || !analysis.overallRiskLevel) return // not ready yet
-
-      clearInterval(pollInterval)
-      const textEl = badge.querySelector('.dataguard-badge-text')
-      if (!textEl) return
-
-      const risk = analysis.overallRiskLevel
-      const count = analysis.dataTypes ? analysis.dataTypes.length : 0
-      const colors = {
-        high: { bg: '#FEF2F2', border: '#FCA5A5', text: '#DC2626' },
-        medium: { bg: '#FFFBEB', border: '#FDE68A', text: '#D97706' },
-        low: { bg: '#ECFDF5', border: '#A7F3D0', text: '#059669' },
-      }
-      const c = colors[risk] || colors.medium
-      badge.style.background = c.bg
-      badge.style.borderColor = c.border
-      badge.style.color = c.text
-      textEl.textContent = `${risk.toUpperCase()} RISK · ${count} data types — Click for details`
-
-      // Click opens inline dashboard (iframe with full popup UI)
-      badge.addEventListener('click', (e) => {
-        e.stopPropagation()
-        openDashboardIframe(analysis)
-      })
-    })
-  }, 1000) // check every second
+  // Open the dashboard immediately
+  openDashboardIframe()
 }
 
-function detectAndInjectBadges() {
-  const agreements = findTermsAgreementElements()
-  for (const { element, policyLinks } of agreements) {
-    injectRiskBadge(element, policyLinks)
-  }
-}
-
+// Run after page loads
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', detectAndInjectBadges)
+  document.addEventListener('DOMContentLoaded', () => setTimeout(autoDetectAndAnalyze, 1000))
 } else {
-  detectAndInjectBadges()
+  setTimeout(autoDetectAndAnalyze, 1000)
 }
 
-const _dgObserver = new MutationObserver(() => { detectAndInjectBadges() })
+// Watch for dynamic content (SPAs)
+const _dgObserver = new MutationObserver(() => { autoDetectAndAnalyze() })
 _dgObserver.observe(document.body || document.documentElement, { childList: true, subtree: true })
