@@ -1,197 +1,183 @@
-# Privacy Tool - Browser Extension
+<p align="center">
+  <img src="DataGuard/icons/icon128.png" alt="DataGuard Logo" width="80" />
+</p>
 
-A Manifest V3 browser extension that automatically detects privacy policies on web pages, analyzes them using AI, and identifies data collection risks.
+<h1 align="center">DataGuard</h1>
 
-## ✅ Status: Core Pipeline Complete
+<p align="center">
+  <strong>Know what you're agreeing to — before you agree.</strong>
+</p>
 
-**What's Working:**
-- ✅ Policy link detection on any webpage
-- ✅ Document fetching (HTML/PDF/text) with redirect handling
-- ✅ Parsing with section extraction
-- ✅ AI Engine Client with SaulLM-7B (HuggingFace) + GPT-4o fallback
-- ✅ Background service worker orchestrating the full pipeline
-- ✅ Settings UI for API key configuration
-- ✅ 20 unit tests passing
+<p align="center">
+  <img src="https://img.shields.io/badge/chrome-MV3-blue?logo=googlechrome&logoColor=white" alt="Chrome MV3" />
+  <img src="https://img.shields.io/badge/typescript-5.5-blue?logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/AI-Llama%203.1%208B-purple?logo=meta&logoColor=white" alt="Llama 3.1" />
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License" />
+  <img src="https://img.shields.io/badge/built%20with-Kiro-orange" alt="Built with Kiro" />
+</p>
 
-## 🚀 Quick Start
-
-### 1. Install Dependencies
-
-```bash
-npm install
-```
-
-### 2. Build the Extension
-
-```bash
-npm run build
-```
-
-### 3. Load in Chrome/Edge
-
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable "Developer mode" (toggle in top right)
-3. Click "Load unpacked"
-4. Select the **root directory** of this project (the folder containing `manifest.json`)
-
-### 4. Configure API Key
-
-1. Click the extension icon in your browser toolbar
-2. Choose your AI provider:
-   - **SaulLM / HuggingFace** (Recommended): Legal-specialized model
-   - **OpenAI GPT-4o**: General-purpose fallback
-3. Enter your API key
-4. Click "Save & Validate"
-
-**Getting API Keys:**
-- HuggingFace: https://huggingface.co/settings/tokens
-- OpenAI: https://platform.openai.com/api-keys
-
-### 5. Test It
-
-1. Navigate to any website with a privacy policy (e.g., https://policies.google.com/privacy)
-2. The extension will detect the policy link and show an alert popup
-3. Click "Analyze" to run the full pipeline
-4. Results are stored in `chrome.storage.local` (UI display pending)
-
-## 📁 Project Structure
-
-```
-src/
-├── types.ts              # TypeScript interfaces
-├── content_script.ts     # DOM scanning, policy detection
-├── background.ts         # Pipeline orchestration
-├── fetcher.ts            # Document retrieval
-├── ai_engine_client.ts   # AI analysis
-├── popup.ts              # Settings UI
-└── parser/
-    ├── index.ts          # Parser dispatcher
-    ├── html_parser.ts    # HTML extraction (Readability)
-    ├── pdf_parser.ts     # PDF extraction (pdf.js)
-    └── text_parser.ts    # Plain text extraction
-
-tests/
-├── unit/                 # Unit tests (20 passing)
-├── property/             # Property-based tests (optional)
-├── integration/          # Integration tests
-└── smoke/                # End-to-end smoke tests
-
-public/
-└── popup.html            # Settings UI HTML
-
-dist/                     # Build output
-```
-
-## 🧪 Testing
-
-### Run All Tests
-
-```bash
-npm test
-```
-
-### Run Smoke Test (End-to-End)
-
-Requires a real API key:
-
-```bash
-export PRIVACY_TOOL_API_KEY="your-api-key-here"
-npm run smoke -- https://policies.google.com/privacy
-```
-
-## 🛠️ Development
-
-### Watch Mode
-
-```bash
-npm run dev
-```
-
-Rebuilds automatically when source files change.
-
-### Tech Stack
-
-- **TypeScript 5.5.3** (strict mode)
-- **Vite 5.3.4** (bundler)
-- **Vitest 2.0.4** (test framework)
-- **fast-check 3.21.0** (property-based testing)
-- **@mozilla/readability** (HTML parsing)
-- **pdfjs-dist** (PDF parsing)
-- **ajv** (JSON schema validation)
-
-## 📊 AI Models
-
-### SaulLM-7B-Instruct (Recommended)
-
-- **Provider**: HuggingFace Inference API
-- **Specialization**: Legal documents (privacy policies, ToS, GDPR/CCPA text)
-- **Context Window**: 32k tokens
-- **Accuracy**: Understands legal terms like "legitimate interest", "data controller", "onward transfer"
-
-### GPT-4o (Fallback)
-
-- **Provider**: OpenAI
-- **Specialization**: General-purpose
-- **Context Window**: 128k tokens
-- **Use Case**: When HuggingFace is unavailable or user prefers OpenAI
-
-## 📝 Output Contract
-
-The extension produces a `Risk_Analysis` JSON object stored in `chrome.storage.local`:
-
-```typescript
-interface Risk_Analysis {
-  schemaVersion: string;
-  policyUrl: string;
-  targetDomain: string;
-  analyzedAt: string;
-  overallRiskLevel: 'low' | 'medium' | 'high';
-  dataTypes: DataTypeEntry[];
-  analysisWarnings: string[];
-  modelUsed: string;
-}
-
-interface DataTypeEntry {
-  dataType: string;              // e.g., "location data"
-  riskLevel: 'low' | 'medium' | 'high';
-  purposes: string[];            // Stated purposes
-  sharedWithThirdParties: boolean;
-  thirdPartyCategories: string[];
-  warningNote: string | null;    // Flags ambiguous language
-  deviationNote: string | null;  // Flags unusual data access
-}
-```
-
-## 🚧 Known Limitations
-
-- **Risk Breakdown UI**: Not yet implemented (Step 1 deliverable is the JSON contract)
-- **API Key Storage**: Currently plaintext (production would use Web Crypto API encryption)
-- **PDF Parsing**: Relies on font-size heuristics for heading detection
-- **Property-Based Tests**: Defined but not implemented (optional for MVP)
-
-## 📚 Spec Documentation
-
-Full spec available in `.kiro/specs/policy-detection-risk-identification/`:
-- `requirements.md` - 6 requirements covering the pipeline
-- `design.md` - Architecture, data models, AI prompt design, 10 correctness properties
-- `tasks.md` - 11 implementation tasks (Tasks 1-8 complete)
-
-## 🎯 Next Steps
-
-1. Implement Risk_Breakdown display UI (frontend)
-2. Add property-based tests for 10 correctness properties
-3. Implement API key encryption (Web Crypto API)
-4. Add integration tests for background pipeline
-5. Create smoke test with real privacy policy URLs
-
-## 📄 License
-
-MIT
-
-## 🤝 Contributing
-
-This is a hackathon project. Contributions welcome!
+<p align="center">
+  DataGuard is a Chrome extension that reads any website's privacy policy using AI, shows you exactly what data is being collected, checks if the site has been breached, and helps you opt out — all in one click.
+</p>
 
 ---
 
-**Built with Kiro** - AI-powered development environment
+## What It Does
+
+- **Reads the actual privacy policy** — not just metadata. AI analyzes the full legal text and extracts what matters.
+- **Shows you a plain-language risk breakdown** — data types, purposes, third-party sharing, and risk levels at a glance.
+- **Checks breach history** — queries the Have I Been Pwned database so you know if a site has leaked data before.
+- **Helps you opt out** — one-click URL opening, pre-filled opt-out emails, and calendar reminders for follow-ups.
+
+---
+
+## Key Features
+
+### 🤖 AI-Powered Privacy Policy Analysis
+
+DataGuard fetches the full privacy policy text, sends it to a legal-aware LLM (Llama 3.1 8B via HuggingFace), and returns a structured breakdown of every data type collected — with risk levels, purposes, and third-party sharing disclosures. No more reading 5,000-word legal documents.
+
+### 🏷️ Apple-Style Privacy Labels
+
+A visual grid inspired by Apple's App Store privacy labels. See at a glance across 14 data categories — Health, Financial, Location, Contacts, Browsing, Identifiers, and more — what's collected, what's shared, and what's sold.
+
+### 🚪 Opt-Out Automation
+
+For every data type with an opt-out mechanism, DataGuard gives you action buttons:
+- **Settings URLs & web forms** → one-click opens in a new tab
+- **Email opt-outs** → pre-filled email with your domain, data type, and privacy regulation references (GDPR, CCPA)
+- **Postal mail** → downloadable `.ics` calendar reminder so you don't forget to send the letter
+- **Follow-up reminders** → schedule a 14-day check to verify your opt-out was processed
+
+### 🔓 Breach History
+
+Checks the [Have I Been Pwned](https://haveibeenpwned.com/) database for the current site. See the number of breaches, dates, types of data exposed, and affected accounts — before you hand over your information.
+
+### 🔍 Real-Time Page Scanning
+
+The content script scans every page you visit for data input fields (email, password, credit card, address) and classifies them by sensitivity. You see what data the page is asking for right now, not just what the policy says.
+
+---
+
+## Screenshots
+
+> 📸 **Screenshots coming soon** — the extension is fully functional and ready for demo.
+
+---
+
+## Quick Start
+
+### 1. Clone and build
+
+```bash
+git clone <repo-url>
+cd dataguard
+npm install
+npm run build
+```
+
+### 2. Load in Chrome
+
+1. Open `chrome://extensions/`
+2. Enable **Developer mode** (top right)
+3. Click **Load unpacked**
+4. Select the **root project folder** (the one containing `manifest.json`)
+
+### 3. Get a HuggingFace API key
+
+1. Go to [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+2. Create a new token with **Inference** permissions
+3. Click the DataGuard icon in Chrome → **Settings** → paste your key → **Save & Validate**
+
+### 4. Use it
+
+Navigate to any website. Click the DataGuard icon to see:
+- What data the page collects
+- Breach history for the domain
+- AI analysis of the privacy policy (click "Analyze Privacy Policy")
+- Opt-out actions for each data type
+
+---
+
+## How It Works
+
+```
+┌──────────────┐     ┌──────────────────┐     ┌────────────┐     ┌──────────────┐
+│  You visit   │────▶│  Content Script   │────▶│ Background │────▶│  AI Engine   │
+│  a website   │     │  scans the page   │     │  Worker    │     │  (Llama 3.1) │
+└──────────────┘     └──────────────────┘     └────────────┘     └──────────────┘
+                        │                         │                     │
+                        │ Detects policy links    │ Fetches policy      │ Analyzes text
+                        │ Scans input fields      │ Parses HTML/PDF     │ Extracts risks
+                        │ Checks HIBP breaches    │ Routes messages     │ Finds opt-outs
+                        │                         │                     │
+                        ▼                         ▼                     ▼
+                   ┌──────────────────────────────────────────────────────────┐
+                   │              DataGuard Popup UI                          │
+                   │  ┌─────────┐ ┌──────────┐ ┌─────────┐ ┌─────────────┐  │
+                   │  │ Fields  │ │ Breaches │ │ AI Risk │ │  Opt-Out    │  │
+                   │  │ Detected│ │ History  │ │ Analysis│ │  Actions    │  │
+                   │  └─────────┘ └──────────┘ └─────────┘ └─────────────┘  │
+                   └──────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Language** | TypeScript 5.5 (strict mode) |
+| **Bundler** | Vite 5.3 |
+| **Extension** | Chrome Manifest V3 |
+| **AI Model** | Llama 3.1 8B Instruct via [HuggingFace Inference Providers API](https://huggingface.co/docs/inference-providers) |
+| **Breach Data** | [Have I Been Pwned API](https://haveibeenpwned.com/API/v3) |
+| **HTML Parsing** | Mozilla Readability |
+| **Testing** | Vitest + fast-check (property-based testing) |
+| **Storage** | `chrome.storage.local` (all data stays on your machine) |
+
+---
+
+## Privacy
+
+DataGuard is built with a privacy-first philosophy:
+
+- **No tracking.** Zero analytics, no telemetry, no usage data collected.
+- **Local storage only.** All settings, cached analyses, and action history stay in your browser's local storage.
+- **No data sent anywhere** except to the AI provider you explicitly configure (HuggingFace or OpenAI) — and only the privacy policy text, never your personal data.
+- **You control the API key.** Your key, your provider, your choice. Remove it anytime.
+- **Open source.** Every line of code is auditable.
+
+---
+
+## Built with Kiro
+
+This project was built using [Kiro](https://kiro.dev), an AI-powered development environment by Amazon.
+
+We used Kiro's full feature set throughout the build:
+
+- **Spec-Driven Development** — Created 4 formal specs using Kiro's Requirements → Design → Tasks workflow, each with formal correctness properties for property-based testing
+- **Steering Files** — Workspace-level steering files (`tech.md`, `structure.md`, `product.md`) guided Kiro's code generation to match our conventions
+- **Hooks** — Automated workflows for generating technical reports
+- **AI-Powered Debugging** — Kiro helped us solve MV3 service worker crashes, HuggingFace API migration, and complex multi-file integration
+- **Real-Time Pair Programming** — One person tested in Chrome while Kiro fixed issues in real-time
+
+See [DOCUMENTATION.md](./DOCUMENTATION.md) for the full story of how we used Kiro.
+
+---
+
+## Team
+
+Built during a hackathon by:
+
+| Role | Focus |
+|---|---|
+| **Product + Spec Lead** | Overall concept, Kiro specs, coordination |
+| **Frontend + Integration** | Browser extension UI, policy detection, opt-out pipeline |
+| **Backend + AI** | AI analysis engine, structured extraction, reminder scheduler |
+
+---
+
+## License
+
+[MIT](./LICENSE)
