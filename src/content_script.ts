@@ -114,16 +114,12 @@ function initContentScript() {
 }
 
 // Listen for messages from background
-chrome.runtime.onMessage.addListener((message: ExtensionMessage) => {
-  if (message.type === 'SHOW_ALERT_POPUP') {
-    injectAlertPopup(message.payload);
-  }
-  if (message.type === 'ANALYSIS_COMPLETE') {
-    showAnalysisResults(message.payload);
-  }
-  if (message.type === 'ANALYSIS_ERROR') {
-    showAnalysisError(message.payload);
-  }
+// Note: The overlay UI is now handled by the DataGuard popup (DataGuard/popup.js).
+// The content script only detects policy links and stores metadata for the popup to use.
+// The SHOW_ALERT_POPUP, ANALYSIS_COMPLETE, and ANALYSIS_ERROR handlers are disabled
+// since the popup handles all UI rendering now.
+chrome.runtime.onMessage.addListener((_message: ExtensionMessage) => {
+  // No-op — popup handles all UI now
 });
 
 function injectAlertPopup(payload: ShowAlertPopupMessage['payload']) {

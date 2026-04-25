@@ -342,56 +342,26 @@ chrome.runtime.onMessage.addListener(
 
 async function handlePolicyDetected(
   message: PolicyDetectedMessage,
-  sender: chrome.runtime.MessageSender
+  _sender: chrome.runtime.MessageSender
 ) {
-  // Store metadata
+  // Store metadata — the popup reads this to find policy URLs
   await chrome.storage.local.set({
     [`metadata_${message.payload.domain}`]: message.payload,
   });
 
-  // Send SHOW_ALERT_POPUP back to content script
-  if (sender.tab?.id) {
-    chrome.tabs.sendMessage(sender.tab.id, {
-      type: 'SHOW_ALERT_POPUP',
-      payload: {
-        policyLinks: message.payload.detectedPolicyLinks,
-        hasConsentDialog: message.payload.hasConsentDialog,
-      },
-    } as ExtensionMessage);
-  }
+  // Note: No longer sending SHOW_ALERT_POPUP back to content script.
+  // The DataGuard popup handles all UI rendering now.
 }
 
 async function handleInitiateAnalysis(
   message: InitiateAnalysisMessage,
-  sender: chrome.runtime.MessageSender
+  _sender: chrome.runtime.MessageSender
 ) {
   try {
     const analysis = await runAnalysisPipeline(message.payload);
-
-    // Send success message
-    if (sender.tab?.id) {
-      chrome.tabs.sendMessage(sender.tab.id, {
-        type: 'ANALYSIS_COMPLETE',
-        payload: analysis,
-      } as ExtensionMessage);
-    }
-
     return { success: true, analysis };
   } catch (error) {
     if (error instanceof AnalysisError) {
-      // Send error message
-      if (sender.tab?.id) {
-        chrome.tabs.sendMessage(sender.tab.id, {
-          type: 'ANALYSIS_ERROR',
-          payload: {
-            code: error.code,
-            message: error.message,
-            retryable: error.retryable,
-            manualInputFallback: error.manualInputFallback,
-          },
-        } as ExtensionMessage);
-      }
-
       return {
         success: false,
         error: {
@@ -401,19 +371,6 @@ async function handleInitiateAnalysis(
           manualInputFallback: error.manualInputFallback,
         },
       };
-    }
-
-    // Unknown error
-    if (sender.tab?.id) {
-      chrome.tabs.sendMessage(sender.tab.id, {
-        type: 'ANALYSIS_ERROR',
-        payload: {
-          code: 'PARSE_ERROR',
-          message: 'An unexpected error occurred.',
-          retryable: true,
-          manualInputFallback: true,
-        },
-      } as ExtensionMessage);
     }
 
     return {
