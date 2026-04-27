@@ -356,6 +356,66 @@ export class OpenAIAdapter implements LLMAdapter {
   }
 }
 
+export class GroqAdapter implements LLMAdapter {
+  modelId = 'llama-3.1-8b-instant';
+
+  constructor(private apiKey: string) {}
+
+  async complete(systemPrompt: string, userMessage: string, timeoutMs: number = 120000): Promise<string> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      console.log('[Groq] Sending request...');
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'llama-3.1-8b-instant',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          temperature: 0.3,
+          max_tokens: 4000,
+          response_format: { type: 'json_object' },
+        }),
+        signal: controller.signal,
+      });
+
+      console.log('[Groq] Response status:', response.status);
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new AnalysisError('API_KEY_INVALID', 'Groq API key is invalid.', false, false, `HTTP 401`);
+        }
+        if (response.status === 429) {
+          throw new AnalysisError('AI_UNAVAILABLE', 'Groq rate limit reached. Wait a moment and try again.', true, false, `HTTP 429`);
+        }
+        if (response.status >= 500) {
+          throw new AnalysisError('AI_UNAVAILABLE', 'Groq service unavailable. Try again shortly.', true, false, `HTTP ${response.status}`);
+        }
+        throw new AnalysisError('API_KEY_INVALID', `Groq request failed (HTTP ${response.status}).`, false, false, `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('[Groq] Response received');
+      return result.choices[0].message.content;
+    } catch (error) {
+      if (error instanceof AnalysisError) throw error;
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new AnalysisError('AI_UNAVAILABLE', `Request timed out after ${Math.round(timeoutMs / 1000)} seconds.`, true, false, 'AbortError');
+      }
+      throw new AnalysisError('AI_UNAVAILABLE', 'Network error connecting to Groq.', true, false, error instanceof Error ? error.message : String(error));
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 // ─── Task 6.3: Prompt Construction ────────────────────────────────────────────
 
 function buildSystemPrompt(): string {
@@ -531,17 +591,22 @@ export async function analyzePolicy(parsed: Parsed_Policy): Promise<Risk_Analysi
   }
 
   // Instantiate adapter
-  const adapterType = storage.adapterType || 'saulm';
-  const adapter: LLMAdapter = adapterType === 'openai'
-    ? new OpenAIAdapter(storage.apiKey)
-    : new SaulLMAdapter(storage.apiKey);
+  const adapterType = storage.adapterType || 'groq';
+  let adapter: LLMAdapter;
+  if (adapterType === 'openai') {
+    adapter = new OpenAIAdapter(storage.apiKey);
+  } else if (adapterType === 'groq') {
+    adapter = new GroqAdapter(storage.apiKey);
+  } else {
+    adapter = new SaulLMAdapter(storage.apiKey);
+  }
 
   // Build prompts
   const systemPrompt = buildSystemPrompt();
   
   // Apply token budget — Llama 3.1 8B on HuggingFace free tier has 8192 token limit
   // System prompt is ~2000 tokens, response needs ~2000, leaving ~4000 for policy text
-  const maxTokens = adapterType === 'openai' ? 100000 : 4000;
+  const maxTokens = adapterType === 'openai' ? 100000 : adapterType === 'groq' ? 6000 : 4000;
   const { text: fullText, wasTruncated } = truncateText(parsed.fullText, maxTokens);
   
   const targetDomain = new URL(parsed.sourceUrl).hostname;
@@ -581,10 +646,15 @@ export async function analyzePolicy(parsed: Parsed_Policy): Promise<Risk_Analysi
 
 // ─── Task 8.2: API Key Testing ────────────────────────────────────────────────
 
-export async function testApiKey(apiKey: string, adapterType: 'saulm' | 'openai'): Promise<void> {
-  const adapter: LLMAdapter = adapterType === 'openai'
-    ? new OpenAIAdapter(apiKey)
-    : new SaulLMAdapter(apiKey);
+export async function testApiKey(apiKey: string, adapterType: 'saulm' | 'openai' | 'groq'): Promise<void> {
+  let adapter: LLMAdapter;
+  if (adapterType === 'openai') {
+    adapter = new OpenAIAdapter(apiKey);
+  } else if (adapterType === 'groq') {
+    adapter = new GroqAdapter(apiKey);
+  } else {
+    adapter = new SaulLMAdapter(apiKey);
+  }
 
   // Simple test prompt — just needs a valid response, not a full analysis
   const testPrompt = 'Respond with exactly this JSON: {"dataTypes":[], "analysisWarnings":[]}';
